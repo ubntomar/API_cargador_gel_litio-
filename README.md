@@ -6,8 +6,8 @@ API REST para control y monitoreo del cargador solar ESP32.
 
 ```bash
 # Clonar/crear el proyecto
-git clone <tu-repo> esp32_api
-cd esp32_api
+git clone https://github.com/ubntomar/API_cargador_gel_litio-.git
+cd API_cargador_gel_litio-
 
 # Crear entorno virtual
 python3 -m venv venv
