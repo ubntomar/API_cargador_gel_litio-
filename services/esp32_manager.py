@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ESP32Manager - Implementación Completa
-Comunicación robusta con el protocolo real del ESP32
+ESP32Manager - Versión Corregida y Simplificada
+Basada en el test manual que SÍ funciona
 """
 
 import serial
@@ -42,9 +42,6 @@ class ESP32Manager:
         # Rate limiting
         self.request_times = []
         
-        # Buffer para lectura serial
-        self.serial_buffer = ""
-        
     async def start(self) -> bool:
         """Inicializar manager y conectar"""
         logger.info("🚀 Iniciando ESP32 Manager...")
@@ -73,51 +70,77 @@ class ESP32Manager:
         logger.info("✅ ESP32 Manager detenido")
     
     async def _connect(self) -> bool:
-        """Establecer conexión serial"""
+        """Establecer conexión serial - SIMPLIFICADO"""
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
+                logger.info(f"🔌 Intento de conexión {attempt + 1}/{max_retries}")
+                
                 if self.serial_conn and self.serial_conn.is_open:
                     self.serial_conn.close()
                 
+                # Abrir puerto serial - exactamente como el test manual
                 self.serial_conn = serial.Serial(
                     port=settings.SERIAL_PORT,
                     baudrate=settings.SERIAL_BAUDRATE,
-                    timeout=settings.SERIAL_TIMEOUT,
+                    timeout=5,  # Timeout más largo
                     bytesize=serial.EIGHTBITS,
                     parity=serial.PARITY_NONE,
                     stopbits=serial.STOPBITS_ONE
                 )
                 
-                # Limpiar buffers
-                self.serial_conn.reset_input_buffer()
-                self.serial_conn.reset_output_buffer()
+                # Esperar un poco para estabilizar conexión
+                await asyncio.sleep(1)
                 
-                # Probar comunicación básica
-                if await self._test_communication():
+                # Test simple - exactamente como tu comando manual
+                success = await self._simple_test()
+                
+                if success:
                     self.connected = True
                     self.communication_errors = 0
                     logger.info(f"✅ Conectado al ESP32 en {settings.SERIAL_PORT}")
                     return True
+                else:
+                    logger.warning(f"⚠️ Test de conexión falló en intento {attempt + 1}")
                 
             except Exception as e:
-                logger.warning(f"❌ Intento {attempt + 1}: {e}")
+                logger.warning(f"❌ Intento {attempt + 1} falló: {e}")
+                if self.serial_conn and self.serial_conn.is_open:
+                    self.serial_conn.close()
                 await asyncio.sleep(1)
         
         self.connected = False
         return False
     
-    async def _test_communication(self) -> bool:
-        """Probar comunicación básica enviando GET_DATA"""
+    async def _simple_test(self) -> bool:
+        """Test simple - replica exactamente tu comando manual"""
         try:
-            # Intentar enviar comando y verificar que recibimos algo
-            test_response = await self._send_command_raw("CMD:GET_DATA", expect_response=True)
-            if test_response and (test_response.startswith("DATA:") or test_response.startswith("HEARTBEAT:")):
+            logger.debug("🧪 Ejecutando test simple...")
+            
+            # Limpiar buffers
+            self.serial_conn.reset_input_buffer()
+            self.serial_conn.reset_output_buffer()
+            
+            # Enviar comando - exactamente como tu test
+            self.serial_conn.write(b"CMD:GET_DATA\n")
+            self.serial_conn.flush()
+            
+            # Leer respuesta - exactamente como tu test
+            response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+            
+            logger.debug(f"🔍 Respuesta del test: {response[:100]}...")
+            
+            # Verificar si es una respuesta válida
+            if response and (response.startswith("DATA:") or response.startswith("HEARTBEAT:")):
+                logger.debug("✅ Test simple exitoso")
                 return True
-            return False
+            else:
+                logger.debug("❌ Test simple falló - respuesta inválida")
+                return False
+                
         except Exception as e:
-            logger.warning(f"Test de comunicación falló: {e}")
+            logger.debug(f"❌ Test simple falló con excepción: {e}")
             return False
     
     def _start_worker_thread(self):
@@ -169,24 +192,27 @@ class ESP32Manager:
         return True
     
     def _send_command_sync(self, command: str) -> Optional[str]:
-        """Enviar comando síncronamente (para worker thread)"""
+        """Enviar comando síncronamente - SIMPLIFICADO"""
         if not self.connected or not self.serial_conn:
             raise ESP32CommunicationError("ESP32 no conectado")
         
         try:
+            logger.debug(f"📤 Enviando comando: {command}")
+            
             # Limpiar buffer de entrada
             self.serial_conn.reset_input_buffer()
             
-            # Enviar comando
+            # Enviar comando - exactamente como tu test manual
             cmd_bytes = f"{command}\n".encode('utf-8')
             self.serial_conn.write(cmd_bytes)
             self.serial_conn.flush()
             
-            logger.debug(f"📤 Comando enviado: {command}")
+            # Esperar un poco
+            time.sleep(0.1)
             
-            # Leer respuesta con manejo especial para DATA
+            # Leer respuesta según el tipo de comando
             if command == "CMD:GET_DATA":
-                response = self._read_json_response()
+                response = self._read_data_response()
             else:
                 response = self._read_simple_response()
             
@@ -195,8 +221,9 @@ class ESP32Manager:
                 self.communication_errors = 0
                 logger.debug(f"📥 Respuesta recibida: {response[:100]}...")
                 return response
-            
-            return None
+            else:
+                logger.warning("⚠️ No se recibió respuesta")
+                return None
             
         except Exception as e:
             self.communication_errors += 1
@@ -205,110 +232,43 @@ class ESP32Manager:
                 logger.error("🔴 Demasiados errores de comunicación, desconectando")
             raise ESP32CommunicationError(f"Error de comunicación: {e}")
     
+    def _read_data_response(self) -> Optional[str]:
+        """Leer respuesta DATA - exactamente como tu test manual"""
+        try:
+            # Usar readline exactamente como en tu test
+            response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+            
+            if response and response.startswith("DATA:"):
+                # Verificar que el JSON sea válido
+                try:
+                    json_str = response[5:]  # Remover "DATA:"
+                    json.loads(json_str)  # Validar JSON
+                    return response
+                except json.JSONDecodeError:
+                    logger.warning("⚠️ JSON inválido recibido")
+                    return None
+            else:
+                logger.debug(f"⚠️ Respuesta no es DATA: {response[:50]}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Error leyendo respuesta DATA: {e}")
+            return None
+    
     def _read_simple_response(self) -> Optional[str]:
         """Leer respuesta simple (OK:, ERROR:, etc)"""
         try:
-            start_time = time.time()
+            response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
             
-            while (time.time() - start_time) < settings.SERIAL_TIMEOUT:
-                if self.serial_conn.in_waiting > 0:
-                    line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
-                    if line and (line.startswith("OK:") or line.startswith("ERROR:") or line.startswith("HEARTBEAT:")):
-                        return line
-                time.sleep(0.01)
-            
-            logger.warning("⏰ Timeout leyendo respuesta simple")
-            return None
-            
+            if response and (response.startswith("OK:") or response.startswith("ERROR:") or response.startswith("HEARTBEAT:")):
+                return response
+            else:
+                logger.debug(f"⚠️ Respuesta simple inesperada: {response}")
+                return None
+                
         except Exception as e:
             logger.error(f"❌ Error leyendo respuesta simple: {e}")
             return None
-    
-    def _read_json_response(self) -> Optional[str]:
-        """Leer respuesta JSON completa del ESP32"""
-        try:
-            start_time = time.time()
-            buffer = ""
-            json_started = False
-            brace_count = 0
-            
-            while (time.time() - start_time) < (settings.SERIAL_TIMEOUT * 2):  # Más tiempo para JSON
-                if self.serial_conn.in_waiting > 0:
-                    # Leer en chunks pequeños
-                    chunk = self.serial_conn.read(min(64, self.serial_conn.in_waiting))
-                    chunk_str = chunk.decode('utf-8', errors='ignore')
-                    buffer += chunk_str
-                    
-                    # Detectar inicio de JSON
-                    if not json_started and 'DATA:{' in buffer:
-                        json_started = True
-                        start_idx = buffer.find('DATA:{')
-                        buffer = buffer[start_idx:]
-                        brace_count = 0
-                    
-                    if json_started:
-                        # Contar llaves para detectar JSON completo
-                        for char in chunk_str:
-                            if char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                
-                                # JSON completo encontrado
-                                if brace_count == 0:
-                                    json_end = buffer.rfind('}') + 1
-                                    json_str = buffer[:json_end]
-                                    
-                                    # Validar que es JSON válido
-                                    if self._validate_json(json_str):
-                                        return json_str
-                                    else:
-                                        logger.warning("⚠️ JSON inválido recibido")
-                                        return None
-                    
-                    # Protección contra buffer muy largo
-                    if len(buffer) > 4096:
-                        logger.warning("⚠️ Buffer demasiado largo, reiniciando lectura")
-                        buffer = buffer[-1024:]  # Mantener últimos 1KB
-                        json_started = False
-                        brace_count = 0
-                        
-                else:
-                    time.sleep(0.01)
-            
-            # Si llegamos aquí, fue timeout
-            if json_started:
-                logger.warning(f"⏰ Timeout leyendo JSON (parcial: {len(buffer)} chars)")
-            else:
-                logger.warning("⏰ Timeout - no se encontró inicio de JSON")
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"❌ Error leyendo JSON: {e}")
-            return None
-    
-    def _validate_json(self, json_str: str) -> bool:
-        """Validar que el JSON recibido es válido"""
-        try:
-            if not json_str.startswith("DATA:{") or not json_str.endswith("}"):
-                return False
-            
-            # Intentar parsear para verificar
-            test_json = json_str[5:]  # Remover "DATA:"
-            json.loads(test_json)
-            return True
-            
-        except json.JSONDecodeError:
-            return False
-        except Exception:
-            return False
-    
-    async def _send_command_raw(self, command: str, expect_response: bool = True) -> Optional[str]:
-        """Enviar comando raw async"""
-        return await asyncio.get_event_loop().run_in_executor(
-            None, self._send_command_sync, command
-        )
     
     async def get_data(self) -> Optional[ESP32Data]:
         """Obtener datos completos del ESP32"""
@@ -338,24 +298,13 @@ class ESP32Manager:
             return None
         
         if not response or not response.startswith("DATA:"):
-            logger.warning("⚠️ Respuesta inválida del ESP32")
+            logger.warning(f"⚠️ Respuesta inválida del ESP32: {response}")
             return None
         
         try:
-            # Parsear JSON
+            # Parsear JSON - exactamente como debería funcionar
             json_str = response[5:]  # Remover "DATA:"
             data_dict = json.loads(json_str)
-            
-            # Verificar que tenemos los campos mínimos requeridos
-            required_fields = [
-                'panelToBatteryCurrent', 'batteryToLoadCurrent', 'voltagePanel',
-                'voltageBatterySensor2', 'currentPWM', 'temperature', 'chargeState'
-            ]
-            
-            for field in required_fields:
-                if field not in data_dict:
-                    logger.warning(f"⚠️ Campo requerido faltante: {field}")
-                    data_dict[field] = 0 if field != 'chargeState' else 'UNKNOWN'
             
             # Convertir a modelo Pydantic
             esp32_data = ESP32Data(**data_dict)
@@ -366,10 +315,13 @@ class ESP32Manager:
             
         except json.JSONDecodeError as e:
             logger.error(f"❌ Error parseando JSON: {e}")
-            logger.error(f"JSON recibido: {response[:200]}...")
+            logger.error(f"JSON problemático: {response[:200]}...")
             return None
         except Exception as e:
             logger.error(f"❌ Error creando modelo: {e}")
+            # Mostrar qué campos faltan
+            if isinstance(e, TypeError) and "required positional argument" in str(e):
+                logger.error(f"Campos en JSON: {list(data_dict.keys()) if 'data_dict' in locals() else 'No se pudo parsear'}")
             return None
     
     async def set_parameter(self, parameter: str, value: Any) -> bool:
