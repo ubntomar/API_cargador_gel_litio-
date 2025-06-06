@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Manager robusto para comunicación con ESP32
+ESP32Manager - Implementación Completa
+Comunicación robusta con el protocolo real del ESP32
 """
 
 import serial
@@ -40,6 +41,9 @@ class ESP32Manager:
         
         # Rate limiting
         self.request_times = []
+        
+        # Buffer para lectura serial
+        self.serial_buffer = ""
         
     async def start(self) -> bool:
         """Inicializar manager y conectar"""
@@ -90,7 +94,7 @@ class ESP32Manager:
                 self.serial_conn.reset_input_buffer()
                 self.serial_conn.reset_output_buffer()
                 
-                # Probar comunicación
+                # Probar comunicación básica
                 if await self._test_communication():
                     self.connected = True
                     self.communication_errors = 0
@@ -105,11 +109,15 @@ class ESP32Manager:
         return False
     
     async def _test_communication(self) -> bool:
-        """Probar comunicación básica"""
+        """Probar comunicación básica enviando GET_DATA"""
         try:
-            response = await self._send_command_raw("CMD:GET_DATA", expect_response=False)
-            return response is not None
-        except Exception:
+            # Intentar enviar comando y verificar que recibimos algo
+            test_response = await self._send_command_raw("CMD:GET_DATA", expect_response=True)
+            if test_response and (test_response.startswith("DATA:") or test_response.startswith("HEARTBEAT:")):
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"Test de comunicación falló: {e}")
             return False
     
     def _start_worker_thread(self):
@@ -166,7 +174,7 @@ class ESP32Manager:
             raise ESP32CommunicationError("ESP32 no conectado")
         
         try:
-            # Limpiar buffer
+            # Limpiar buffer de entrada
             self.serial_conn.reset_input_buffer()
             
             # Enviar comando
@@ -174,12 +182,18 @@ class ESP32Manager:
             self.serial_conn.write(cmd_bytes)
             self.serial_conn.flush()
             
-            # Leer respuesta
-            response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+            logger.debug(f"📤 Comando enviado: {command}")
+            
+            # Leer respuesta con manejo especial para DATA
+            if command == "CMD:GET_DATA":
+                response = self._read_json_response()
+            else:
+                response = self._read_simple_response()
             
             if response:
                 self.last_successful_communication = time.time()
                 self.communication_errors = 0
+                logger.debug(f"📥 Respuesta recibida: {response[:100]}...")
                 return response
             
             return None
@@ -188,7 +202,107 @@ class ESP32Manager:
             self.communication_errors += 1
             if self.communication_errors > 5:
                 self.connected = False
+                logger.error("🔴 Demasiados errores de comunicación, desconectando")
             raise ESP32CommunicationError(f"Error de comunicación: {e}")
+    
+    def _read_simple_response(self) -> Optional[str]:
+        """Leer respuesta simple (OK:, ERROR:, etc)"""
+        try:
+            start_time = time.time()
+            
+            while (time.time() - start_time) < settings.SERIAL_TIMEOUT:
+                if self.serial_conn.in_waiting > 0:
+                    line = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+                    if line and (line.startswith("OK:") or line.startswith("ERROR:") or line.startswith("HEARTBEAT:")):
+                        return line
+                time.sleep(0.01)
+            
+            logger.warning("⏰ Timeout leyendo respuesta simple")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error leyendo respuesta simple: {e}")
+            return None
+    
+    def _read_json_response(self) -> Optional[str]:
+        """Leer respuesta JSON completa del ESP32"""
+        try:
+            start_time = time.time()
+            buffer = ""
+            json_started = False
+            brace_count = 0
+            
+            while (time.time() - start_time) < (settings.SERIAL_TIMEOUT * 2):  # Más tiempo para JSON
+                if self.serial_conn.in_waiting > 0:
+                    # Leer en chunks pequeños
+                    chunk = self.serial_conn.read(min(64, self.serial_conn.in_waiting))
+                    chunk_str = chunk.decode('utf-8', errors='ignore')
+                    buffer += chunk_str
+                    
+                    # Detectar inicio de JSON
+                    if not json_started and 'DATA:{' in buffer:
+                        json_started = True
+                        start_idx = buffer.find('DATA:{')
+                        buffer = buffer[start_idx:]
+                        brace_count = 0
+                    
+                    if json_started:
+                        # Contar llaves para detectar JSON completo
+                        for char in chunk_str:
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                
+                                # JSON completo encontrado
+                                if brace_count == 0:
+                                    json_end = buffer.rfind('}') + 1
+                                    json_str = buffer[:json_end]
+                                    
+                                    # Validar que es JSON válido
+                                    if self._validate_json(json_str):
+                                        return json_str
+                                    else:
+                                        logger.warning("⚠️ JSON inválido recibido")
+                                        return None
+                    
+                    # Protección contra buffer muy largo
+                    if len(buffer) > 4096:
+                        logger.warning("⚠️ Buffer demasiado largo, reiniciando lectura")
+                        buffer = buffer[-1024:]  # Mantener últimos 1KB
+                        json_started = False
+                        brace_count = 0
+                        
+                else:
+                    time.sleep(0.01)
+            
+            # Si llegamos aquí, fue timeout
+            if json_started:
+                logger.warning(f"⏰ Timeout leyendo JSON (parcial: {len(buffer)} chars)")
+            else:
+                logger.warning("⏰ Timeout - no se encontró inicio de JSON")
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error leyendo JSON: {e}")
+            return None
+    
+    def _validate_json(self, json_str: str) -> bool:
+        """Validar que el JSON recibido es válido"""
+        try:
+            if not json_str.startswith("DATA:{") or not json_str.endswith("}"):
+                return False
+            
+            # Intentar parsear para verificar
+            test_json = json_str[5:]  # Remover "DATA:"
+            json.loads(test_json)
+            return True
+            
+        except json.JSONDecodeError:
+            return False
+        except Exception:
+            return False
     
     async def _send_command_raw(self, command: str, expect_response: bool = True) -> Optional[str]:
         """Enviar comando raw async"""
@@ -232,14 +346,27 @@ class ESP32Manager:
             json_str = response[5:]  # Remover "DATA:"
             data_dict = json.loads(json_str)
             
+            # Verificar que tenemos los campos mínimos requeridos
+            required_fields = [
+                'panelToBatteryCurrent', 'batteryToLoadCurrent', 'voltagePanel',
+                'voltageBatterySensor2', 'currentPWM', 'temperature', 'chargeState'
+            ]
+            
+            for field in required_fields:
+                if field not in data_dict:
+                    logger.warning(f"⚠️ Campo requerido faltante: {field}")
+                    data_dict[field] = 0 if field != 'chargeState' else 'UNKNOWN'
+            
             # Convertir a modelo Pydantic
             esp32_data = ESP32Data(**data_dict)
             self.last_data = data_dict
             
+            logger.debug("✅ Datos parseados correctamente")
             return esp32_data
             
         except json.JSONDecodeError as e:
             logger.error(f"❌ Error parseando JSON: {e}")
+            logger.error(f"JSON recibido: {response[:200]}...")
             return None
         except Exception as e:
             logger.error(f"❌ Error creando modelo: {e}")
@@ -360,5 +487,15 @@ class ESP32Manager:
             "baudrate": settings.SERIAL_BAUDRATE,
             "last_communication": self.last_successful_communication,
             "communication_errors": self.communication_errors,
-            "queue_size": self.command_queue.qsize()
+            "queue_size": self.command_queue.qsize() if self.command_queue else 0
+        }
+    
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Información de debug"""
+        return {
+            "manager_running": self.running,
+            "serial_open": self.serial_conn.is_open if self.serial_conn else False,
+            "worker_alive": self.worker_thread.is_alive() if self.worker_thread else False,
+            "last_data_keys": list(self.last_data.keys()) if self.last_data else [],
+            "request_times_count": len(self.request_times)
         }
