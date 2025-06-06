@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Manager robusto para comunicación con ESP32
-ARCHIVO PRINCIPAL - Ver implementación completa en la documentación
 """
 
 import serial
@@ -55,6 +54,20 @@ class ESP32Manager:
         logger.error("❌ Error iniciando ESP32 Manager")
         return False
     
+    async def stop(self):
+        """Detener manager"""
+        logger.info("🛑 Deteniendo ESP32 Manager...")
+        self.running = False
+        
+        if self.worker_thread:
+            self.worker_thread.join(timeout=5)
+        
+        if self.serial_conn and self.serial_conn.is_open:
+            self.serial_conn.close()
+        
+        self.connected = False
+        logger.info("✅ ESP32 Manager detenido")
+    
     async def _connect(self) -> bool:
         """Establecer conexión serial"""
         max_retries = 3
@@ -91,91 +104,253 @@ class ESP32Manager:
         self.connected = False
         return False
     
-    async def get_data(self) -> Optional[ESP32Data]:
-        """Obtener datos completos del ESP32"""
-        # Implementación simplificada para demo
-        logger.info("📊 Solicitando datos del ESP32...")
-        
-        # Aquí iría la implementación completa del protocolo serial
-        # Por ahora retorna datos de ejemplo
+    async def _test_communication(self) -> bool:
+        """Probar comunicación básica"""
         try:
-            # Datos de ejemplo para pruebas
-            sample_data = {
-                "panelToBatteryCurrent": 2450.0,
-                "batteryToLoadCurrent": 1850.2,
-                "voltagePanel": 18.45,
-                "voltageBatterySensor2": 13.28,
-                "currentPWM": 145,
-                "temperature": 42.3,
-                "chargeState": "ABSORPTION_CHARGE",
-                "bulkVoltage": 14.4,
-                "absorptionVoltage": 14.4,
-                "floatVoltage": 13.6,
-                "LVD": 12.0,
-                "LVR": 12.5,
-                "batteryCapacity": 100.0,
-                "thresholdPercentage": 2.5,
-                "maxAllowedCurrent": 8000.0,
-                "isLithium": False,
-                "maxBatteryVoltageAllowed": 15.0,
-                "absorptionCurrentThreshold_mA": 2500.0,
-                "currentLimitIntoFloatStage": 500.0,
-                "calculatedAbsorptionHours": 1.25,
-                "accumulatedAh": 67.8,
-                "estimatedSOC": 68.5,
-                "netCurrent": 599.8,
-                "factorDivider": 5,
-                "useFuenteDC": False,
-                "fuenteDC_Amps": 0.0,
-                "maxBulkHours": 0.0,
-                "panelSensorAvailable": True,
-                "maxAbsorptionHours": 1.0,
-                "chargedBatteryRestVoltage": 12.88,
-                "reEnterBulkVoltage": 12.6,
-                "pwmFrequency": 40000,
-                "tempThreshold": 55,
-                "temporaryLoadOff": False,
-                "loadOffRemainingSeconds": 0,
-                "loadOffDuration": 0,
-                "loadControlState": True,
-                "ledSolarState": True,
-                "notaPersonalizada": "Sistema funcionando correctamente",
-                "connected": True,
-                "firmware_version": "ESP32_v2.1",
-                "uptime": 847293,
-                "last_update": str(int(time.time()))
-            }
+            response = await self._send_command_raw("CMD:GET_DATA", expect_response=False)
+            return response is not None
+        except Exception:
+            return False
+    
+    def _start_worker_thread(self):
+        """Iniciar hilo worker para procesar comandos"""
+        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+        self.worker_thread.start()
+    
+    def _worker_loop(self):
+        """Loop principal para procesar comandos en cola"""
+        while self.running:
+            try:
+                # Procesar comando con timeout
+                command_data = self.command_queue.get(timeout=1.0)
+                command, callback, timeout = command_data
+                
+                # Rate limiting
+                if not self._can_send_request():
+                    callback(None, "Rate limit exceeded")
+                    continue
+                
+                # Enviar comando
+                try:
+                    response = self._send_command_sync(command)
+                    callback(response, None)
+                except Exception as e:
+                    callback(None, str(e))
+                
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"❌ Error en worker loop: {e}")
+    
+    def _can_send_request(self) -> bool:
+        """Verificar rate limiting"""
+        now = time.time()
+        
+        # Limpiar requests viejos
+        self.request_times = [t for t in self.request_times if (now - t) < 60]
+        
+        # Verificar límite por minuto
+        if len(self.request_times) >= settings.MAX_REQUESTS_PER_MINUTE:
+            return False
+        
+        # Verificar intervalo mínimo
+        if self.request_times and (now - self.request_times[-1]) < settings.MIN_COMMAND_INTERVAL:
+            return False
+        
+        self.request_times.append(now)
+        return True
+    
+    def _send_command_sync(self, command: str) -> Optional[str]:
+        """Enviar comando síncronamente (para worker thread)"""
+        if not self.connected or not self.serial_conn:
+            raise ESP32CommunicationError("ESP32 no conectado")
+        
+        try:
+            # Limpiar buffer
+            self.serial_conn.reset_input_buffer()
             
-            return ESP32Data(**sample_data)
+            # Enviar comando
+            cmd_bytes = f"{command}\n".encode('utf-8')
+            self.serial_conn.write(cmd_bytes)
+            self.serial_conn.flush()
+            
+            # Leer respuesta
+            response = self.serial_conn.readline().decode('utf-8', errors='ignore').strip()
+            
+            if response:
+                self.last_successful_communication = time.time()
+                self.communication_errors = 0
+                return response
+            
+            return None
             
         except Exception as e:
-            logger.error(f"❌ Error obteniendo datos: {e}")
+            self.communication_errors += 1
+            if self.communication_errors > 5:
+                self.connected = False
+            raise ESP32CommunicationError(f"Error de comunicación: {e}")
+    
+    async def _send_command_raw(self, command: str, expect_response: bool = True) -> Optional[str]:
+        """Enviar comando raw async"""
+        return await asyncio.get_event_loop().run_in_executor(
+            None, self._send_command_sync, command
+        )
+    
+    async def get_data(self) -> Optional[ESP32Data]:
+        """Obtener datos completos del ESP32"""
+        def callback_wrapper(response, error):
+            callback_wrapper.result = (response, error)
+        
+        # Agregar comando a la cola
+        try:
+            self.command_queue.put(("CMD:GET_DATA", callback_wrapper, 10), timeout=1)
+        except queue.Full:
+            logger.warning("⚠️ Cola de comandos llena")
+            return None
+        
+        # Esperar respuesta
+        start_time = time.time()
+        while not hasattr(callback_wrapper, 'result') and (time.time() - start_time) < 10:
+            await asyncio.sleep(0.1)
+        
+        if not hasattr(callback_wrapper, 'result'):
+            logger.error("❌ Timeout esperando respuesta")
+            return None
+        
+        response, error = callback_wrapper.result
+        
+        if error:
+            logger.error(f"❌ Error obteniendo datos: {error}")
+            return None
+        
+        if not response or not response.startswith("DATA:"):
+            logger.warning("⚠️ Respuesta inválida del ESP32")
+            return None
+        
+        try:
+            # Parsear JSON
+            json_str = response[5:]  # Remover "DATA:"
+            data_dict = json.loads(json_str)
+            
+            # Convertir a modelo Pydantic
+            esp32_data = ESP32Data(**data_dict)
+            self.last_data = data_dict
+            
+            return esp32_data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Error parseando JSON: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Error creando modelo: {e}")
             return None
     
     async def set_parameter(self, parameter: str, value: Any) -> bool:
         """Establecer un parámetro"""
-        logger.info(f"⚙️ Configurando {parameter} = {value}")
+        # Convertir valor a string apropiado
+        if isinstance(value, bool):
+            value_str = str(value).lower()
+        else:
+            value_str = str(value)
         
-        # Aquí iría la implementación real del protocolo serial
-        # Por ahora simula éxito
-        await asyncio.sleep(0.1)  # Simular delay de comunicación
-        return True
+        command = f"CMD:SET_{parameter}:{value_str}"
+        
+        def callback_wrapper(response, error):
+            callback_wrapper.result = (response, error)
+        
+        try:
+            self.command_queue.put((command, callback_wrapper, 5), timeout=1)
+        except queue.Full:
+            logger.warning("⚠️ Cola de comandos llena")
+            return False
+        
+        # Esperar respuesta
+        start_time = time.time()
+        while not hasattr(callback_wrapper, 'result') and (time.time() - start_time) < 5:
+            await asyncio.sleep(0.1)
+        
+        if not hasattr(callback_wrapper, 'result'):
+            return False
+        
+        response, error = callback_wrapper.result
+        
+        if error:
+            logger.error(f"❌ Error configurando {parameter}: {error}")
+            return False
+        
+        success = response and response.startswith("OK:")
+        if success:
+            logger.info(f"✅ {parameter} configurado a {value}")
+        else:
+            logger.error(f"❌ Error configurando {parameter}: {response}")
+        
+        return success
     
     async def toggle_load(self, total_seconds: int) -> bool:
         """Apagar carga temporalmente"""
-        logger.info(f"🔌 Apagando carga por {total_seconds} segundos")
+        if total_seconds < 1 or total_seconds > 43200:
+            logger.error("❌ Duración fuera de rango")
+            return False
         
-        # Aquí iría la implementación real
-        await asyncio.sleep(0.1)
-        return True
+        command = f"CMD:TOGGLE_LOAD:{total_seconds}"
+        
+        def callback_wrapper(response, error):
+            callback_wrapper.result = (response, error)
+        
+        try:
+            self.command_queue.put((command, callback_wrapper, 5), timeout=1)
+        except queue.Full:
+            return False
+        
+        # Esperar respuesta
+        start_time = time.time()
+        while not hasattr(callback_wrapper, 'result') and (time.time() - start_time) < 5:
+            await asyncio.sleep(0.1)
+        
+        if not hasattr(callback_wrapper, 'result'):
+            return False
+        
+        response, error = callback_wrapper.result
+        
+        if error:
+            logger.error(f"❌ Error en toggle_load: {error}")
+            return False
+        
+        success = response and response.startswith("OK:")
+        if success:
+            logger.info(f"✅ Carga apagada por {total_seconds} segundos")
+        
+        return success
     
     async def cancel_temporary_off(self) -> bool:
         """Cancelar apagado temporal"""
-        logger.info("🔌 Cancelando apagado temporal")
+        def callback_wrapper(response, error):
+            callback_wrapper.result = (response, error)
         
-        # Aquí iría la implementación real
-        await asyncio.sleep(0.1)
-        return True
+        try:
+            self.command_queue.put(("CMD:CANCEL_TEMP_OFF", callback_wrapper, 5), timeout=1)
+        except queue.Full:
+            return False
+        
+        # Esperar respuesta
+        start_time = time.time()
+        while not hasattr(callback_wrapper, 'result') and (time.time() - start_time) < 5:
+            await asyncio.sleep(0.1)
+        
+        if not hasattr(callback_wrapper, 'result'):
+            return False
+        
+        response, error = callback_wrapper.result
+        
+        if error:
+            logger.error(f"❌ Error cancelando apagado: {error}")
+            return False
+        
+        success = response and response.startswith("OK:")
+        if success:
+            logger.info("✅ Apagado temporal cancelado")
+        
+        return success
     
     def get_connection_info(self) -> Dict[str, Any]:
         """Obtener información de conexión"""
@@ -185,16 +360,5 @@ class ESP32Manager:
             "baudrate": settings.SERIAL_BAUDRATE,
             "last_communication": self.last_successful_communication,
             "communication_errors": self.communication_errors,
-            "queue_size": 0
+            "queue_size": self.command_queue.qsize()
         }
-    
-    async def stop(self):
-        """Detener manager"""
-        logger.info("🛑 Deteniendo ESP32 Manager...")
-        self.running = False
-        if self.serial_conn and self.serial_conn.is_open:
-            self.serial_conn.close()
-        self.connected = False
-
-# NOTA: Esta es una versión simplificada para el setup inicial.
-# Para la implementación completa, consulta la documentación del proyecto.
