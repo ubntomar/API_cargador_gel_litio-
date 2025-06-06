@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Modelos Pydantic para datos del ESP32
+Modelos Pydantic para datos del ESP32 - Versión Corregida
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Union
 from enum import Enum
 
@@ -85,17 +85,19 @@ class ToggleLoadRequest(BaseModel):
     """Modelo para apagar carga temporalmente"""
     hours: int = Field(0, ge=0, le=12, description="Horas")
     minutes: int = Field(0, ge=0, le=59, description="Minutos")
-    seconds: int = Field(0, ge=1, le=59, description="Segundos")
+    seconds: int = Field(0, ge=0, le=59, description="Segundos")
     
-    @validator('*')
-    def validate_duration(cls, v, values):
-        # Al menos 1 segundo total
-        total = values.get('hours', 0) * 3600 + values.get('minutes', 0) * 60 + v
-        if total < 1:
-            raise ValueError("Duración mínima: 1 segundo")
-        if total > 43200:  # 12 horas
+    @model_validator(mode='after')
+    def validate_total_duration(self):
+        # Calcular tiempo total en segundos
+        total_seconds = self.hours * 3600 + self.minutes * 60 + self.seconds
+        
+        if total_seconds < 1:
+            raise ValueError("Duración mínima: 1 segundo total")
+        if total_seconds > 43200:  # 12 horas
             raise ValueError("Duración máxima: 12 horas")
-        return v
+        
+        return self
 
 class ParameterInfo(BaseModel):
     """Información sobre un parámetro"""
