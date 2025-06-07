@@ -25,6 +25,13 @@ cp .env.example .env
 python main.py
 ```
 
+## Dentro de la carpeta crontab hay un script para controlar arranque automático 
+```bash
+mv ./setup_api_crontab.sh ..
+chmod +x setup_api_crontab.sh
+./setup_api_crontab.sh
+
+```
 ## 📡 Uso de la API
 
 ### Obtener todos los datos
