@@ -1,6 +1,9 @@
 #!/bin/bash
 # Script para iniciar la API
 
+#darle tiempo al crontab para que se ejecute
+sleep 10
+
 # Activar entorno virtual
 source venv/bin/activate
 
