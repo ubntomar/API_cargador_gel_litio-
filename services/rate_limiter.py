@@ -14,6 +14,7 @@ from models.rate_limiting import (
     RateLimitError, RateLimitStats
 )
 from core.logger import logger
+from core.config import settings
 
 class RateLimiter:
     """Rate limiter thread-safe con diferentes límites por operación"""
@@ -25,23 +26,23 @@ class RateLimiter:
         # Configuración de límites por tipo de operación
         self.limits = {
             OperationType.READ_DATA: RateLimitInfo(
-                min_interval_seconds=2,
-                max_per_minute=25,
+                min_interval_seconds=settings.READ_DATA_INTERVAL,
+                max_per_minute=settings.READ_DATA_PER_MINUTE,
                 description="Lectura de datos del ESP32"
             ),
             OperationType.SET_CONFIG: RateLimitInfo(
-                min_interval_seconds=10,
-                max_per_minute=6,
+                min_interval_seconds=settings.CONFIG_CHANGE_INTERVAL,
+                max_per_minute=settings.CONFIG_CHANGE_PER_MINUTE,
                 description="Modificación de configuración"
             ),
             OperationType.EXECUTE_ACTION: RateLimitInfo(
-                min_interval_seconds=30,
-                max_per_minute=3,
+                min_interval_seconds=settings.ACTION_INTERVAL,
+                max_per_minute=settings.ACTION_PER_MINUTE,
                 description="Ejecución de acciones críticas"
             ),
             OperationType.HEALTH_CHECK: RateLimitInfo(
-                min_interval_seconds=1,
-                max_per_minute=60,
+                min_interval_seconds=settings.HEALTH_CHECK_INTERVAL,
+                max_per_minute=settings.HEALTH_CHECK_PER_MINUTE,
                 description="Health checks del sistema"
             )
         }

@@ -21,11 +21,12 @@ from api.config import router as config_router
 from api.actions import router as actions_router
 
 
-# Rate Limiting imports (AGREGAR ESTAS LÍNEAS)
+# Rate Limiting imports 
 from fastapi.responses import JSONResponse
 from services.rate_limiter import rate_limiter
 from models.rate_limiting import RateLimitStats
 
+from core.dependencies import check_health_rate_limit  
 
 # Manager global del ESP32
 esp32_manager: ESP32Manager = None
@@ -112,7 +113,7 @@ async def root():
         }
     }
 
-@app.get("/health")
+@app.get("/health", dependencies=[Depends(check_health_rate_limit)])
 async def health_check():
     """Health check de la API"""
     if not esp32_manager:

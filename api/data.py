@@ -9,6 +9,8 @@ from models.esp32_data import ESP32Data, ParameterInfo
 from services.esp32_manager import ESP32Manager
 from services.data_cache import data_cache
 from core.logger import logger
+from core.dependencies import check_read_rate_limit  
+
 
 router = APIRouter(prefix="/data", tags=["Data"])
 
@@ -17,7 +19,7 @@ async def get_esp32_manager() -> ESP32Manager:
     from main import esp32_manager
     return esp32_manager
 
-@router.get("/", response_model=ESP32Data)
+@router.get("/", response_model=ESP32Data, dependencies=[Depends(check_read_rate_limit)])
 async def get_all_data(manager: ESP32Manager = Depends(get_esp32_manager)):
     """
     Obtener todos los datos del ESP32
@@ -42,7 +44,7 @@ async def get_all_data(manager: ESP32Manager = Depends(get_esp32_manager)):
         logger.error(f"❌ Error en get_all_data: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.get("/{parameter_name}")
+@router.get("/{parameter_name}", dependencies=[Depends(check_read_rate_limit)])
 async def get_parameter(
     parameter_name: str, 
     manager: ESP32Manager = Depends(get_esp32_manager)
@@ -72,14 +74,14 @@ async def get_parameter(
         logger.error(f"❌ Error obteniendo {parameter_name}: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.get("/status/connection")
+@router.get("/status/connection", dependencies=[Depends(check_read_rate_limit)])
 async def get_connection_status(manager: ESP32Manager = Depends(get_esp32_manager)):
     """
     Obtener estado de conexión con ESP32
     """
     return manager.get_connection_info()
 
-@router.get("/status/cache")
+@router.get("/status/cache", dependencies=[Depends(check_read_rate_limit)])
 async def get_cache_status():
     """
     Obtener estadísticas del cache

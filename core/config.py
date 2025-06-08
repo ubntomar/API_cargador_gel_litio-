@@ -38,24 +38,22 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
 
-    # Rate Limiting Configuration (agregado para implementación avanzada)
+    # Rate Limiting Configuration - LEE DEL .env
     RATE_LIMITING_ENABLED: bool = True
-
-    # Rate Limiting por Operación (override de límites por defecto)
-    READ_DATA_INTERVAL: int = 2
-    READ_DATA_PER_MINUTE: int = 25
-
-    CONFIG_CHANGE_INTERVAL: int = 10
-    CONFIG_CHANGE_PER_MINUTE: int = 6
-
-    ACTION_INTERVAL: int = 30
-    ACTION_PER_MINUTE: int = 3
-
-    HEALTH_CHECK_INTERVAL: int = 1
-    HEALTH_CHECK_PER_MINUTE: int = 60
-
-    # Rate Limiting Storage
     RATE_LIMITING_STORAGE: str = "memory"  # memory | redis
     RATE_LIMITING_CLIENT_TRACKING: bool = True
+
+    # Rate Limiting por Operación - USA .env como base
+    READ_DATA_INTERVAL: int = MIN_COMMAND_INTERVAL  # Usa tu valor del .env
+    READ_DATA_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE // 2  # Más restrictivo para lecturas
+
+    CONFIG_CHANGE_INTERVAL: int = MIN_COMMAND_INTERVAL * 3  # 3x más restrictivo que lectura
+    CONFIG_CHANGE_PER_MINUTE: int = 6  # Muy restrictivo para cambios
+
+    ACTION_INTERVAL: int = MIN_COMMAND_INTERVAL * 10  # 10x más restrictivo
+    ACTION_PER_MINUTE: int = 3  # Máximo 3 acciones por minuto
+
+    HEALTH_CHECK_INTERVAL: int = 1  # Health checks pueden ser frecuentes
+    HEALTH_CHECK_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE  # Usa tu valor del .env
 
 settings = Settings()
