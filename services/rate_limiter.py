@@ -88,17 +88,17 @@ class RateLimiter:
                         f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
                         f"Intervalo mínimo: {remaining:.1f}s restantes"
                     )
-                    logger.debug(
+                    logger.info(
                         f"Última request: {self.last_request[key]} ({time_since_last:.1f}s atrás)"
                     )
-                    logger.debug(
+                    logger.info(
                         f"Límite: {limits.min_interval_seconds}s, "
                         f"Descripción: {limits.description}"
                     )
-                    logger.debug(
+                    logger.info(
                         f"Historial de requests: {list(self.request_history[key])}"
                     )
-                    logger.debug(
+                    logger.info(
                         f"Total requests: {self.total_requests}, "
                         f"Bloqueadas: {self.blocked_requests}"
                     )
