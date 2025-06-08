@@ -17,7 +17,7 @@ class OperationType(str, Enum):
 
 class RateLimitInfo(BaseModel):
     """Información de límites para un tipo de operación"""
-    min_interval_seconds: int = Field(..., description="Intervalo mínimo entre requests")
+    min_interval_seconds: float = Field(..., description="Intervalo mínimo entre requests")  # CORREGIDO: int -> float
     max_per_minute: int = Field(..., description="Máximo requests por minuto")
     description: str = Field(..., description="Descripción del tipo de operación")
 

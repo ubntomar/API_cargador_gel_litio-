@@ -43,17 +43,17 @@ class Settings(BaseSettings):
     RATE_LIMITING_STORAGE: str = "memory"  # memory | redis
     RATE_LIMITING_CLIENT_TRACKING: bool = True
 
-    # Rate Limiting por Operación - USA .env como base
-    READ_DATA_INTERVAL: int = MIN_COMMAND_INTERVAL  # Usa tu valor del .env
+    # Rate Limiting por Operación - CORREGIDO: Usar float en lugar de int
+    READ_DATA_INTERVAL: float = MIN_COMMAND_INTERVAL  # Usa tu valor del .env
     READ_DATA_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE // 2  # Más restrictivo para lecturas
 
-    CONFIG_CHANGE_INTERVAL: int = MIN_COMMAND_INTERVAL * 3  # 3x más restrictivo que lectura
+    CONFIG_CHANGE_INTERVAL: float = MIN_COMMAND_INTERVAL * 3  # 3x más restrictivo que lectura
     CONFIG_CHANGE_PER_MINUTE: int = 6  # Muy restrictivo para cambios
 
-    ACTION_INTERVAL: int = MIN_COMMAND_INTERVAL * 10  # 10x más restrictivo
+    ACTION_INTERVAL: float = MIN_COMMAND_INTERVAL * 10  # 10x más restrictivo
     ACTION_PER_MINUTE: int = 3  # Máximo 3 acciones por minuto
 
-    HEALTH_CHECK_INTERVAL: int = 1  # Health checks pueden ser frecuentes
+    HEALTH_CHECK_INTERVAL: float = 1.0  # Health checks pueden ser frecuentes
     HEALTH_CHECK_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE  # Usa tu valor del .env
 
 settings = Settings()
