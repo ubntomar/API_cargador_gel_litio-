@@ -20,6 +20,13 @@ from api.data import router as data_router
 from api.config import router as config_router  
 from api.actions import router as actions_router
 
+
+# Rate Limiting imports (AGREGAR ESTAS LÍNEAS)
+from fastapi.responses import JSONResponse
+from services.rate_limiter import rate_limiter
+from models.rate_limiting import RateLimitStats
+
+
 # Manager global del ESP32
 esp32_manager: ESP32Manager = None
 
@@ -72,6 +79,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate Limiting Exception Handler (AGREGAR ESTE BLOQUE)
+@app.exception_handler(429)
+async def rate_limit_handler(request, exc):
+    """Handler personalizado para errores de rate limiting"""
+    return JSONResponse(
+        status_code=429,
+        content=exc.detail,
+        headers={"Retry-After": str(exc.detail.get("wait_seconds", 60))}
+    )
+
+
 # Incluir routers
 app.include_router(data_router)
 app.include_router(config_router) 
@@ -107,6 +125,19 @@ async def health_check():
         "timestamp": asyncio.get_event_loop().time(),
         "esp32_connection": connection_info
     }
+
+# Rate Limiting Endpoints (AGREGAR ESTE BLOQUE)
+@app.get("/rate-limit/stats")
+async def get_rate_limit_stats() -> RateLimitStats:
+    """Obtener estadísticas de rate limiting"""
+    return rate_limiter.get_stats()
+
+@app.post("/rate-limit/reset")
+async def reset_rate_limits():
+    """Reset rate limits (útil para testing)"""
+    rate_limiter.reset_limits()
+    return {"message": "Rate limits reset successfully"}
+
 
 if __name__ == "__main__":
     # Ejecutar servidor

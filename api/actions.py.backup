@@ -8,7 +8,6 @@ from models.esp32_data import ToggleLoadRequest
 from services.esp32_manager import ESP32Manager
 from services.data_cache import data_cache
 from core.logger import logger
-from core.dependencies import check_action_rate_limit, check_read_rate_limit
 
 router = APIRouter(prefix="/actions", tags=["Actions"])
 
@@ -17,7 +16,7 @@ async def get_esp32_manager() -> ESP32Manager:
     from main import esp32_manager
     return esp32_manager
 
-@router.post("/toggle_load", dependencies=[Depends(check_action_rate_limit)])
+@router.post("/toggle_load")
 async def toggle_load(
     request: ToggleLoadRequest,
     manager: ESP32Manager = Depends(get_esp32_manager)
@@ -78,7 +77,7 @@ async def toggle_load(
         logger.error(f"❌ Error inesperado en toggle_load: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.post("/cancel_temp_off", dependencies=[Depends(check_action_rate_limit)])
+@router.post("/cancel_temp_off")
 async def cancel_temporary_off(manager: ESP32Manager = Depends(get_esp32_manager)):
     """
     Cancelar el apagado temporal de la carga - MEJORADO
@@ -112,7 +111,7 @@ async def cancel_temporary_off(manager: ESP32Manager = Depends(get_esp32_manager
         logger.error(f"❌ Error inesperado cancelando apagado temporal: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-@router.get("/status", dependencies=[Depends(check_read_rate_limit)])
+@router.get("/status")
 async def get_actions_status(manager: ESP32Manager = Depends(get_esp32_manager)):
     """
     Obtener estado actual de las acciones - CORREGIDO
