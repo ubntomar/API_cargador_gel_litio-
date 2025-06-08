@@ -88,7 +88,21 @@ class RateLimiter:
                         f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
                         f"Intervalo mínimo: {remaining:.1f}s restantes"
                     )
-                    
+                    logger.debug(
+                        f"Última request: {self.last_request[key]} ({time_since_last:.1f}s atrás)"
+                    )
+                    logger.debug(
+                        f"Límite: {limits.min_interval_seconds}s, "
+                        f"Descripción: {limits.description}"
+                    )
+                    logger.debug(
+                        f"Historial de requests: {list(self.request_history[key])}"
+                    )
+                    logger.debug(
+                        f"Total requests: {self.total_requests}, "
+                        f"Bloqueadas: {self.blocked_requests}"
+                    )
+                    # Lanzar excepción con detalles del error
                     raise HTTPException(
                         status_code=429,
                         detail=RateLimitError(
