@@ -96,7 +96,7 @@ class RateLimiter:
                             limit_type="minimum_interval",
                             description=limits.description,
                             wait_seconds=round(remaining, 1)
-                        ).dict()
+                        ).model_dump()
                     )
             
             # 2. Verificar límite por minuto
