@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Rate Limiter Avanzado para ESP32 API
+Rate Limiter Optimizado - Reducción de Logs para Prevenir Congelamiento
 """
 
 import time
@@ -17,7 +17,7 @@ from core.logger import logger
 from core.config import settings
 
 class RateLimiter:
-    """Rate limiter thread-safe con diferentes límites por operación"""
+    """Rate limiter optimizado con logging reducido"""
     
     def __init__(self):
         self.lock = threading.Lock()
@@ -55,18 +55,29 @@ class RateLimiter:
         self.total_requests = 0
         self.blocked_requests = 0
         
-        logger.info("✅ Rate Limiter inicializado con límites diferenciados")
+        # ✅ NUEVO: Control de logging para prevenir spam
+        self.last_log_time: Dict[str, float] = {}
+        self.log_cooldown = 5.0  # Mínimo 5 segundos entre logs similares
+        
+        logger.info("✅ Rate Limiter optimizado inicializado")
+    
+    def _should_log(self, log_key: str) -> bool:
+        """Determinar si se debe hacer log para evitar spam"""
+        now = time.time()
+        if log_key not in self.last_log_time:
+            self.last_log_time[log_key] = now
+            return True
+        
+        if (now - self.last_log_time[log_key]) >= self.log_cooldown:
+            self.last_log_time[log_key] = now
+            return True
+        
+        return False
     
     def check_rate_limit(self, operation_type: OperationType, 
                         client_id: str = "default") -> bool:
         """
-        Verificar si la request está dentro de los límites
-        
-        Returns:
-            True si está permitido
-            
-        Raises:
-            HTTPException: Si excede los límites
+        Verificar si la request está dentro de los límites - OPTIMIZADO
         """
         with self.lock:
             now = time.time()
@@ -84,24 +95,15 @@ class RateLimiter:
                     remaining = min_interval - time_since_last
                     self.blocked_requests += 1
                     
-                    logger.warning(
-                        f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
-                        f"Intervalo mínimo: {remaining:.1f}s restantes"
-                    )
-                    logger.info(
-                        f"Última request: {self.last_request[key]} ({time_since_last:.1f}s atrás)"
-                    )
-                    logger.info(
-                        f"Límite: {limits.min_interval_seconds}s, "
-                        f"Descripción: {limits.description}"
-                    )
-                    logger.info(
-                        f"Historial de requests: {list(self.request_history[key])}"
-                    )
-                    logger.info(
-                        f"Total requests: {self.total_requests}, "
-                        f"Bloqueadas: {self.blocked_requests}"
-                    )
+                    # ✅ OPTIMIZADO: Logging limitado
+                    log_key = f"interval_{operation_type.value}_{client_id}"
+                    if self._should_log(log_key):
+                        logger.warning(
+                            f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
+                            f"Intervalo mínimo: {remaining:.1f}s restantes. "
+                            f"Total bloqueadas: {self.blocked_requests}"
+                        )
+                    
                     # Lanzar excepción con detalles del error
                     raise HTTPException(
                         status_code=429,
@@ -126,10 +128,14 @@ class RateLimiter:
                 oldest_request = history[0] if history else now
                 reset_in = 60 - (now - oldest_request)
                 
-                logger.warning(
-                    f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
-                    f"Máximo {limits.max_per_minute}/min excedido"
-                )
+                # ✅ OPTIMIZADO: Logging limitado
+                log_key = f"perminute_{operation_type.value}_{client_id}"
+                if self._should_log(log_key):
+                    logger.warning(
+                        f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
+                        f"Máximo {limits.max_per_minute}/min excedido. "
+                        f"Reset en {reset_in:.1f}s"
+                    )
                 
                 raise HTTPException(
                     status_code=429,
@@ -140,17 +146,20 @@ class RateLimiter:
                         requests_in_last_minute=len(history),
                         max_per_minute=limits.max_per_minute,
                         reset_in_seconds=max(0, round(reset_in, 1))
-                    ).dict()
+                    ).model_dump()
                 )
             
             # 3. Registrar request exitosa
             self.last_request[key] = now
             history.append(now)
             
-            logger.debug(
-                f"✅ Rate limit OK: {operation_type.value} [{client_id}] - "
-                f"{len(history)}/{limits.max_per_minute} en último minuto"
-            )
+            # ✅ OPTIMIZADO: Debug logging solo cada 10 requests o para operaciones críticas
+            if (operation_type in [OperationType.SET_CONFIG, OperationType.EXECUTE_ACTION] or 
+                self.total_requests % 10 == 0):
+                logger.debug(
+                    f"✅ Rate limit OK: {operation_type.value} [{client_id}] - "
+                    f"{len(history)}/{limits.max_per_minute} en último minuto"
+                )
             
             return True
     
@@ -238,10 +247,11 @@ class RateLimiter:
                 self.request_history.clear()
                 self.total_requests = 0
                 self.blocked_requests = 0
+                self.last_log_time.clear()  # ✅ NUEVO: Reset también los logs
                 logger.info("🔄 Todos los rate limits reset")
     
     def update_limits(self, operation_type: OperationType, 
-                     min_interval: Optional[int] = None,
+                     min_interval: Optional[float] = None,  # ✅ CORREGIDO: float
                      max_per_minute: Optional[int] = None):
         """Actualizar límites dinámicamente"""
         with self.lock:
