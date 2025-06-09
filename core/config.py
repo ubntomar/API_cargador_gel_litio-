@@ -24,8 +24,8 @@ class Settings(BaseSettings):
     SERIAL_TIMEOUT: float = 3.0
     
     # Rate Limiting BASE - LEE DEL .env
-    MIN_COMMAND_INTERVAL: float = 0.6  # 600ms entre comandos (valor por defecto)
-    MAX_REQUESTS_PER_MINUTE: int = 200
+    MIN_COMMAND_INTERVAL: float = 0.1  #  (valor por defecto)
+    MAX_REQUESTS_PER_MINUTE: int = 600
     
     # Cache Configuration
     CACHE_TTL: int = 2  # 2 segundos de cache
