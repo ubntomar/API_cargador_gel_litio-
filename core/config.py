@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     MIN_COMMAND_INTERVAL: float = 0.6  # 600ms entre comandos
-    MAX_REQUESTS_PER_MINUTE: int = 60
+    MAX_REQUESTS_PER_MINUTE: int = 160
     
     # Cache Configuration
     CACHE_TTL: int = 2  # 2 segundos de cache
@@ -45,8 +45,8 @@ class Settings(BaseSettings):
 
     # Rate Limiting por Operación - CORREGIDO: Usar float en lugar de int
     READ_DATA_INTERVAL: float = MIN_COMMAND_INTERVAL  # Usa tu valor del .env
-    READ_DATA_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE // 2  # Más restrictivo para lecturas
-
+    READ_DATA_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE # Usa tu valor del .env
+    print (f"READ_DATA_PER_MINUTE: {READ_DATA_PER_MINUTE}")
     CONFIG_CHANGE_INTERVAL: float = MIN_COMMAND_INTERVAL * 3  # 3x más restrictivo que lectura
     CONFIG_CHANGE_PER_MINUTE: int = 6  # Muy restrictivo para cambios
 
