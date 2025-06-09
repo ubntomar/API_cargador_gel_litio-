@@ -99,7 +99,7 @@ class RateLimiter:
                     log_key = f"interval_{operation_type.value}_{client_id}"
                     if self._should_log(log_key):
                         logger.warning(
-                            f"⚡ Rate limit: {operation_type.value} [{client_id}] - "
+                            f"⚡ Rate limit(): {operation_type.value} [{client_id}] - "
                             f"Intervalo mínimo: {remaining:.1f}s restantes. "
                             f"Total bloqueadas: {self.blocked_requests}"
                         )

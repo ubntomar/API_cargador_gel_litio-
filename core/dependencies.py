@@ -45,7 +45,7 @@ async def check_read_rate_limit(request: Request):
         rate_limiter.check_rate_limit(OperationType.READ_DATA, client_id)
         logger.debug(f"✅ Rate limit READ OK para {client_id}")
     except Exception as e:
-        logger.warning(f"⚡ Rate limit READ bloqueado para {client_id}")
+        logger.warning(f"⚡ Rate limit READ (request individual) bloqueado para {client_id}")
         raise
 
 async def check_config_rate_limit(request: Request):
