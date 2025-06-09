@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Configuración global de la API ESP32
+Configuración global de la API ESP32 - RATE LIMITING CORREGIDO
 """
 
 from pydantic_settings import BaseSettings
@@ -23,9 +23,9 @@ class Settings(BaseSettings):
     SERIAL_BAUDRATE: int = 9600
     SERIAL_TIMEOUT: float = 3.0
     
-    # Rate Limiting
-    MIN_COMMAND_INTERVAL: float = 0.6  # 600ms entre comandos
-    MAX_REQUESTS_PER_MINUTE: int = 160
+    # Rate Limiting BASE - LEE DEL .env
+    MIN_COMMAND_INTERVAL: float = 0.6  # 600ms entre comandos (valor por defecto)
+    MAX_REQUESTS_PER_MINUTE: int = 60
     
     # Cache Configuration
     CACHE_TTL: int = 2  # 2 segundos de cache
@@ -37,23 +37,57 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
+    
+    # ✅ CORRECCIÓN: Rate Limiting calculado DESPUÉS de leer .env
+    @property
+    def READ_DATA_INTERVAL(self) -> float:
+        """Intervalo mínimo para lectura de datos"""
+        return self.MIN_COMMAND_INTERVAL
+    
+    @property 
+    def READ_DATA_PER_MINUTE(self) -> int:
+        """Máximo requests por minuto para lectura"""
+        return self.MAX_REQUESTS_PER_MINUTE
+    
+    @property
+    def CONFIG_CHANGE_INTERVAL(self) -> float:
+        """Intervalo mínimo para cambios de configuración (3x más restrictivo)"""
+        return self.MIN_COMMAND_INTERVAL * 3
+    
+    @property
+    def CONFIG_CHANGE_PER_MINUTE(self) -> int:
+        """Máximo cambios de configuración por minuto"""
+        return max(6, self.MAX_REQUESTS_PER_MINUTE // 10)  # Mínimo 6, máximo 10% del total
+    
+    @property
+    def ACTION_INTERVAL(self) -> float:
+        """Intervalo mínimo para acciones críticas (10x más restrictivo)"""
+        return self.MIN_COMMAND_INTERVAL * 10
+    
+    @property
+    def ACTION_PER_MINUTE(self) -> int:
+        """Máximo acciones por minuto"""
+        return max(3, self.MAX_REQUESTS_PER_MINUTE // 20)  # Mínimo 3, máximo 5% del total
+    
+    @property
+    def HEALTH_CHECK_INTERVAL(self) -> float:
+        """Intervalo mínimo para health checks (más permisivo)"""
+        return max(1.0, self.MIN_COMMAND_INTERVAL / 2)  # Mínimo 1s, o la mitad del interval base
+    
+    @property
+    def HEALTH_CHECK_PER_MINUTE(self) -> int:
+        """Máximo health checks por minuto"""
+        return self.MAX_REQUESTS_PER_MINUTE
 
-    # Rate Limiting Configuration - LEE DEL .env
-    RATE_LIMITING_ENABLED: bool = True
-    RATE_LIMITING_STORAGE: str = "memory"  # memory | redis
-    RATE_LIMITING_CLIENT_TRACKING: bool = True
-
-    # Rate Limiting por Operación - CORREGIDO: Usar float en lugar de int
-    READ_DATA_INTERVAL: float = MIN_COMMAND_INTERVAL  # Usa tu valor del .env
-    READ_DATA_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE # Usa tu valor del .env
-    print (f"READ_DATA_PER_MINUTE: {READ_DATA_PER_MINUTE}")
-    CONFIG_CHANGE_INTERVAL: float = MIN_COMMAND_INTERVAL * 3  # 3x más restrictivo que lectura
-    CONFIG_CHANGE_PER_MINUTE: int = 6  # Muy restrictivo para cambios
-
-    ACTION_INTERVAL: float = MIN_COMMAND_INTERVAL * 10  # 10x más restrictivo
-    ACTION_PER_MINUTE: int = 3  # Máximo 3 acciones por minuto
-
-    HEALTH_CHECK_INTERVAL: float = 1.0  # Health checks pueden ser frecuentes
-    HEALTH_CHECK_PER_MINUTE: int = MAX_REQUESTS_PER_MINUTE  # Usa tu valor del .env
-
+# Crear instancia global
 settings = Settings()
+
+# Opcional: Imprimir configuración de rate limiting al iniciar
+if __name__ == "__main__":
+    print("🔧 Configuración de Rate Limiting:")
+    print(f"  MIN_COMMAND_INTERVAL: {settings.MIN_COMMAND_INTERVAL}s")
+    print(f"  MAX_REQUESTS_PER_MINUTE: {settings.MAX_REQUESTS_PER_MINUTE}")
+    print(f"  READ_DATA_INTERVAL: {settings.READ_DATA_INTERVAL}s")
+    print(f"  CONFIG_CHANGE_INTERVAL: {settings.CONFIG_CHANGE_INTERVAL}s") 
+    print(f"  ACTION_INTERVAL: {settings.ACTION_INTERVAL}s")
+    print(f"  HEALTH_CHECK_INTERVAL: {settings.HEALTH_CHECK_INTERVAL}s")
