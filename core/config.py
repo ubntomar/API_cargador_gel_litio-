@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     
     # Rate Limiting BASE - LEE DEL .env
     MIN_COMMAND_INTERVAL: float = 0.6  # 600ms entre comandos (valor por defecto)
-    MAX_REQUESTS_PER_MINUTE: int = 60
+    MAX_REQUESTS_PER_MINUTE: int = 200
     
     # Cache Configuration
     CACHE_TTL: int = 2  # 2 segundos de cache
