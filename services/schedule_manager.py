@@ -225,7 +225,7 @@ class ScheduleManager:
             next_today = datetime.combine(now.date(), start_dt)
             
             # Si ya pasó hoy o hay override activo, será mañana
-            if (next_today <= now or 
+            if (next_today < now or 
                 (self.manual_override_active and 
                  self.manual_override_until and 
                  next_today < self.manual_override_until)):
