@@ -242,7 +242,7 @@ async def disable_schedule(manager: ScheduleManager = Depends(get_schedule_manag
     try:
         logger.info("🔛 Deshabilitando schedule")
         
-        # Obtener configuración actual
+        # Obtener configuración actual..
         current_status = manager.get_status()
         
         # Deshabilitar manteniendo configuración
