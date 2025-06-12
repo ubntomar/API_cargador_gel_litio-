@@ -203,10 +203,14 @@ async def enable_schedule(manager: ScheduleManager = Depends(get_schedule_manage
         current_status = manager.get_status()
         
         # Habilitar con configuración actual
+        # Manejar valores None correctamente
+        start_time = current_status.get("start_time") or "00:00"
+        duration_seconds = current_status.get("duration_seconds") or 21600
+
         success = manager.configure_schedule(
             enabled=True,
-            start_time=current_status.get("start_time", "00:00"),
-            duration_seconds=current_status.get("duration_seconds", 21600)
+            start_time=start_time,
+            duration_seconds=duration_seconds
         )
         
         if not success:
@@ -242,10 +246,13 @@ async def disable_schedule(manager: ScheduleManager = Depends(get_schedule_manag
         current_status = manager.get_status()
         
         # Deshabilitar manteniendo configuración
+        start_time = current_status.get("start_time") or "00:00"
+        duration_seconds = current_status.get("duration_seconds") or 21600
+
         success = manager.configure_schedule(
             enabled=False,
-            start_time=current_status.get("start_time", "00:00"),
-            duration_seconds=current_status.get("duration_seconds", 21600)
+            start_time=start_time,
+            duration_seconds=duration_seconds
         )
         
         if not success:
