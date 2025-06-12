@@ -310,7 +310,6 @@ class ScheduleManager:
     def get_info(self) -> Dict[str, Any]:
         """Obtener información sobre las capacidades del schedule"""
         import time
-        import pytz
         
         try:
             local_tz = str(time.tzname[0])
