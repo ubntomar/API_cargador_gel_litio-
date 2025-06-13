@@ -14,6 +14,7 @@ from core.dependencies import check_config_rate_limit
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
 # CORRECCIÓN: Parámetros configurables con validación MEJORADA
+
 CONFIGURABLE_PARAMETERS = {
     "bulkVoltage": {"type": float, "min": 12.0, "max": 15.0},
     "absorptionVoltage": {"type": float, "min": 12.0, "max": 15.0},
