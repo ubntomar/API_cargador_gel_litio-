@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Endpoints para configuración del ESP32 - CONTROL PWM AGREGADO
+Endpoints para configuración del ESP32 - ERROR JSON CORREGIDO
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -13,27 +13,35 @@ from core.dependencies import check_config_rate_limit
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
-# ✅ CORREGIDO: Parámetros configurables con PWM agregado
+# ✅ CORREGIDO: Usar strings en lugar de tipos Python para evitar error de serialización JSON
 CONFIGURABLE_PARAMETERS = {
     # Parámetros de voltaje
-    "bulkVoltage": {"type": float, "min": 12.0, "max": 15.0, "description": "Voltaje BULK (V)"},
-    "absorptionVoltage": {"type": float, "min": 12.0, "max": 15.0, "description": "Voltaje ABSORCIÓN (V)"},
-    "floatVoltage": {"type": float, "min": 12.0, "max": 15.0, "description": "Voltaje FLOTACIÓN (V)"},
+    "bulkVoltage": {"type": "float", "min": 12.0, "max": 15.0, "description": "Voltaje BULK (V)"},
+    "absorptionVoltage": {"type": "float", "min": 12.0, "max": 15.0, "description": "Voltaje ABSORCIÓN (V)"},
+    "floatVoltage": {"type": "float", "min": 12.0, "max": 15.0, "description": "Voltaje FLOTACIÓN (V)"},
     
     # Parámetros de batería
-    "batteryCapacity": {"type": float, "min": 1.0, "max": 1000.0, "description": "Capacidad batería (Ah)"},
-    "thresholdPercentage": {"type": float, "min": 0.1, "max": 5.0, "description": "Umbral corriente (%)"},
-    "maxAllowedCurrent": {"type": float, "min": 1000.0, "max": 15000.0, "description": "Corriente máxima (mA)"},
-    "isLithium": {"type": bool, "description": "Tipo batería (true=Litio, false=GEL)"},
-    "factorDivider": {"type": int, "min": 1, "max": 10, "description": "Factor divisor"},
+    "batteryCapacity": {"type": "float", "min": 1.0, "max": 1000.0, "description": "Capacidad batería (Ah)"},
+    "thresholdPercentage": {"type": "float", "min": 0.1, "max": 5.0, "description": "Umbral corriente (%)"},
+    "maxAllowedCurrent": {"type": "float", "min": 1000.0, "max": 15000.0, "description": "Corriente máxima (mA)"},
+    "isLithium": {"type": "bool", "description": "Tipo batería (true=Litio, false=GEL)"},
+    "factorDivider": {"type": "int", "min": 1, "max": 10, "description": "Factor divisor"},
     
     # Parámetros de fuente
-    "useFuenteDC": {"type": bool, "description": "Usar fuente DC"},
-    "fuenteDC_Amps": {"type": float, "min": 0.0, "max": 50.0, "description": "Amperaje fuente DC (A)"},
+    "useFuenteDC": {"type": "bool", "description": "Usar fuente DC"},
+    "fuenteDC_Amps": {"type": "float", "min": 0.0, "max": 50.0, "description": "Amperaje fuente DC (A)"},
     
-    # ✅ NUEVO: Parámetros de control PWM
-    "currentPWM": {"type": int, "min": 0, "max": 255, "description": "Valor PWM directo (0-255)"},
-    "pwmPercentage": {"type": float, "min": 0.0, "max": 100.0, "description": "PWM en porcentaje (0-100%)"},
+    # Parámetros de control PWM
+    "currentPWM": {"type": "int", "min": 0, "max": 255, "description": "Valor PWM directo (0-255)"},
+    "pwmPercentage": {"type": "float", "min": 0.0, "max": 100.0, "description": "PWM en porcentaje (0-100%)"},
+}
+
+# ✅ CORREGIDO: Mapeo de strings a tipos Python para validación
+TYPE_MAPPING = {
+    "float": float,
+    "int": int,
+    "bool": bool,
+    "str": str
 }
 
 async def get_esp32_manager() -> ESP32Manager:
@@ -42,12 +50,18 @@ async def get_esp32_manager() -> ESP32Manager:
     return esp32_manager
 
 def validate_parameter_value(parameter: str, value: Any) -> Any:
-    """Validar valor de parámetro - CON SOPORTE PWM"""
+    """Validar valor de parámetro - CON MAPEO DE TIPOS CORREGIDO"""
     if parameter not in CONFIGURABLE_PARAMETERS:
         raise ValueError(f"Parámetro '{parameter}' no es configurable")
     
     config = CONFIGURABLE_PARAMETERS[parameter]
-    expected_type = config["type"]
+    type_str = config["type"]
+    
+    # ✅ CORREGIDO: Obtener tipo Python desde string
+    if type_str not in TYPE_MAPPING:
+        raise ValueError(f"Tipo no soportado: {type_str}")
+    
+    expected_type = TYPE_MAPPING[type_str]
     
     logger.debug(f"🔍 Validando {parameter}: {value} (tipo recibido: {type(value)})")
     
@@ -92,7 +106,7 @@ def validate_parameter_value(parameter: str, value: Any) -> Any:
         if "max" in config and value > config["max"]:
             raise ValueError(f"Valor máximo para {parameter}: {config['max']} (recibido: {value})")
     
-    # ✅ NUEVO: Validaciones especiales para PWM
+    # Validaciones especiales para PWM
     if parameter == "currentPWM":
         if not (0 <= value <= 255):
             raise ValueError(f"PWM debe estar entre 0-255 (recibido: {value})")
@@ -106,7 +120,7 @@ def validate_parameter_value(parameter: str, value: Any) -> Any:
 
 @router.get("/")
 async def get_configurable_parameters():
-    """Obtener lista de parámetros configurables - INCLUYENDO PWM"""
+    """Obtener lista de parámetros configurables - JSON SERIALIZABLE"""
     return {
         "configurable_parameters": list(CONFIGURABLE_PARAMETERS.keys()),
         "parameter_info": CONFIGURABLE_PARAMETERS,
@@ -127,7 +141,7 @@ async def get_configurable_parameters():
             "batteryCapacity": {"valid": [7.0, 50.0, 100.0], "invalid": [-1, 1001]},
             "isLithium": {"valid": [True, False, "true", "false", 1, 0], "invalid": ["maybe", 2]},
             "currentPWM": {"valid": [0, 128, 255], "invalid": [-1, 256]},
-            "pwmPercentage": {"valid": [0.0, 50.0, 100.0], "invalid": [-1.0, 101.0]},
+            "pwmPercentage": {"valid": [0.0, 25.0, 50.0, 75.0, 100.0], "invalid": [-1.0, 101.0]},
             "thresholdPercentage": {"valid": [1.0, 3.0, 5.0], "invalid": [0, 6]},
             "factorDivider": {"valid": [1, 5, 10], "invalid": [0, 11]}
         }
@@ -140,7 +154,7 @@ async def set_parameter(
     _: None = Depends(check_config_rate_limit),
     manager: ESP32Manager = Depends(get_esp32_manager)
 ):
-    """Configurar un parámetro específico - CON SOPORTE PWM"""
+    """Configurar un parámetro específico"""
     try:
         logger.info(f"🔧 Solicitud configuración: {parameter_name} = {config.value} (tipo: {type(config.value)})")
         
@@ -161,7 +175,7 @@ async def set_parameter(
                 detail="ESP32 no está conectado. Verifica la conexión serial."
             )
         
-        # ✅ NUEVO: Logging especial para PWM
+        # Logging especial para PWM
         if parameter_name in ["currentPWM", "pwmPercentage"]:
             logger.warning(f"🎛️ CONTROL PWM: {parameter_name} = {validated_value}")
             logger.warning("⚠️ ADVERTENCIA: El control manual de PWM puede afectar la carga automática")
@@ -180,7 +194,7 @@ async def set_parameter(
         data_cache.invalidate("all_data")
         data_cache.invalidate(f"param_{parameter_name}")
         
-        # ✅ NUEVO: Respuesta mejorada con información PWM
+        # Respuesta mejorada con información PWM
         response = {
             "success": True,
             "parameter": parameter_name,
@@ -217,7 +231,7 @@ async def set_parameter(
 
 @router.get("/{parameter_name}")
 async def get_parameter_info(parameter_name: str):
-    """Obtener información sobre un parámetro específico - INCLUYENDO PWM"""
+    """Obtener información sobre un parámetro específico"""
     if parameter_name not in CONFIGURABLE_PARAMETERS:
         raise HTTPException(
             status_code=404, 
@@ -236,7 +250,7 @@ async def get_parameter_info(parameter_name: str):
         "maxAllowedCurrent": {"valid_examples": [3000.0, 6000.0, 8000.0], "unit": "mA"},
         "bulkVoltage": {"valid_examples": [14.2, 14.4, 14.6], "unit": "V"},
         
-        # ✅ NUEVO: Ejemplos para PWM
+        # Ejemplos para PWM
         "currentPWM": {
             "valid_examples": [0, 64, 128, 192, 255],
             "unit": "raw_value",
@@ -265,7 +279,7 @@ async def validate_parameter_endpoint(
     config: ConfigParameter,
     _: None = Depends(check_config_rate_limit)
 ):
-    """Validar un valor sin enviarlo al ESP32 (dry-run) - CON SOPORTE PWM"""
+    """Validar un valor sin enviarlo al ESP32 (dry-run)"""
     try:
         validated_value = validate_parameter_value(parameter_name, config.value)
         
@@ -280,7 +294,7 @@ async def validate_parameter_endpoint(
             "message": "Validación exitosa - valor puede ser configurado"
         }
         
-        # ✅ NUEVO: Información adicional para PWM
+        # Información adicional para PWM
         if parameter_name == "pwmPercentage":
             pwm_direct = int((validated_value / 100.0) * 255.0)
             response["pwm_preview"] = {
@@ -310,7 +324,7 @@ async def validate_parameter_endpoint(
         }
 
 def _get_parameter_suggestions(parameter_name: str) -> Dict[str, Any]:
-    """Obtener sugerencias para un parámetro específico - INCLUYENDO PWM"""
+    """Obtener sugerencias para un parámetro específico"""
     suggestions = {
         "batteryCapacity": {
             "range": "1.0 - 1000.0 Ah",
@@ -327,7 +341,7 @@ def _get_parameter_suggestions(parameter_name: str) -> Dict[str, Any]:
             "note": "Porcentaje de corriente para cambio de etapa"
         },
         
-        # ✅ NUEVO: Sugerencias para PWM
+        # Sugerencias para PWM
         "currentPWM": {
             "range": "0 - 255",
             "common_values": [0, 64, 128, 192, 255],
@@ -350,7 +364,7 @@ async def set_multiple_parameters(
     _: None = Depends(check_config_rate_limit),
     manager: ESP32Manager = Depends(get_esp32_manager)
 ):
-    """Configurar múltiples parámetros de una vez - CON SOPORTE PWM"""
+    """Configurar múltiples parámetros de una vez"""
     results = {}
     successful = 0
     failed = 0
@@ -361,7 +375,7 @@ async def set_multiple_parameters(
             # Validar parámetro
             validated_value = validate_parameter_value(param_name, param_value)
             
-            # ✅ NUEVO: Rastrear comandos PWM
+            # Rastrear comandos PWM
             if param_name in ["currentPWM", "pwmPercentage"]:
                 pwm_commands.append(f"{param_name}={validated_value}")
             
@@ -409,7 +423,7 @@ async def set_multiple_parameters(
         }
     }
     
-    # ✅ NUEVO: Advertencia si se configuraron PWM
+    # Advertencia si se configuraron PWM
     if pwm_commands:
         response["pwm_warning"] = {
             "commands_sent": pwm_commands,
@@ -419,7 +433,7 @@ async def set_multiple_parameters(
     
     return response
 
-# ✅ NUEVO: Endpoint específico para control PWM
+# Endpoint específico para control PWM
 @router.post("/pwm/control")
 async def pwm_control(
     pwm_type: str,  # "direct" o "percentage" 
