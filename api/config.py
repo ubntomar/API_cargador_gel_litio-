@@ -26,7 +26,7 @@ CONFIGURABLE_PARAMETERS = {
     "useFuenteDC": {"type": bool},
     "fuenteDC_Amps": {"type": float, "min": 0.0, "max": 50.0},
     "currentPWM": {"type": int, "min": 0, "max": 255},
-    "pwmPercentage": {"type": float, "min": 0.0, "max": 100.0},
+    "pwmPercentage": {"type": float, "min": 0.0, "max": 100.0}
 }
 
 async def get_esp32_manager() -> ESP32Manager:
