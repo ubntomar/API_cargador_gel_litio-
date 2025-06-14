@@ -43,6 +43,7 @@ class ESP32Data(BaseModel):
     absorptionCurrentThreshold_mA: float = Field(..., description="Umbral corriente absorción (mA)")
     currentLimitIntoFloatStage: float = Field(..., description="Límite corriente float (mA)")
     calculatedAbsorptionHours: float = Field(..., description="Horas absorción calculadas")
+    currentBulkHours: float = Field(..., ge=0, description="Horas transcurridas en BULK actual")
     accumulatedAh: float = Field(..., description="Ah acumulados")
     estimatedSOC: float = Field(..., ge=0, le=100, description="SOC estimado (%)")
     netCurrent: float = Field(..., description="Corriente neta (mA)")
