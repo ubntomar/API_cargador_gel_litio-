@@ -9,7 +9,7 @@ API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad d
 git clone <tu-repo> esp32_api
 cd esp32_api
 
-# Crear entorno virtual
+# Crear entorno virtual..
 python3 -m venv venv
 source venv/bin/activate  # Linux/Mac
 # venv\Scripts\activate  # Windows
