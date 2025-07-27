@@ -1,5 +1,5 @@
 # =============================================================================
-# ESP32 Solar Charger API - Docker Compose para Emulación x86_64 en RISC-V
+# ESP32 Solar Charger API - Docker Compose CORREGIDO para Orange Pi R2S
 # =============================================================================
 
 version: '3.8'
@@ -9,20 +9,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      platforms:
-        - linux/amd64  # Forzar emulación x86_64
+      # REMOVIDO: platforms (incompatible con versiones antiguas de docker-compose)
     
-    image: esp32-solar-api:emulated-x86_64
+    image: esp32-solar-api:latest
     container_name: esp32-solar-charger-api
     
     # 🔧 CONFIGURACIÓN DE PUERTO SERIAL
-    # ====================================
-    # CAMBIA AQUÍ tu puerto serial según tu Orange Pi R2S:
-    # - Para /dev/ttyUSB0: Cambia "/dev/ttyS5:/dev/ttyS5" por "/dev/ttyUSB0:/dev/ttyUSB0"
-    # - Para /dev/ttyACM0: Cambia "/dev/ttyS5:/dev/ttyS5" por "/dev/ttyACM0:/dev/ttyACM0"
-    # - Para otro puerto: Ajusta ambos lados del mapeo
     devices:
-      - "/dev/ttyACM0:/dev/ttyACM0"  # ← CAMBIAR AQUÍ tu puerto serial
+      - "/dev/ttyACM0:/dev/ttyACM0"  # ← CAMBIAR según tu puerto
     
     # Puertos de red
     ports:
@@ -30,46 +24,31 @@ services:
     
     # Variables de entorno
     environment:
-      # 🔧 CONFIGURACIÓN SERIAL - CAMBIAR SEGÚN TU PUERTO
-      # =================================================
-      - SERIAL_PORT=/dev/ttyACM0        # ← CAMBIAR a /dev/ttyUSB0 si usas USB
-      - SERIAL_BAUDRATE=9600           # ← Cambiar si tu ESP32 usa otra velocidad
+      - SERIAL_PORT=/dev/ttyACM0
+      - SERIAL_BAUDRATE=9600
       - SERIAL_TIMEOUT=3.0
-      
-      # Configuración de la API
       - HOST=0.0.0.0
       - PORT=8000
       - DEBUG=false
       - LOG_LEVEL=INFO
-      
-      # Rate Limiting
       - MIN_COMMAND_INTERVAL=0.6
       - MAX_REQUESTS_PER_MINUTE=60
-      
-      # Cache
       - CACHE_TTL=2
-      
-      # Timezone
-      - TZ=America/Bogota  # ← Cambiar a tu zona horaria
+      - TZ=America/Bogota
     
     # Volúmenes para persistencia
     volumes:
-      - ./logs:/app/logs                    # Logs persistentes
-      - ./data:/app/data                    # Datos persistentes (opcional)
-      - /etc/localtime:/etc/localtime:ro    # Sincronizar timezone
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - /etc/localtime:/etc/localtime:ro
     
     # Política de reinicio
     restart: unless-stopped
     
-    # Límites de recursos (ajustar según Orange Pi R2S)
-    deploy:
-      resources:
-        limits:
-          memory: 512M      # Límite memoria
-          cpus: '1.0'       # Límite CPU
-        reservations:
-          memory: 256M      # Reserva memoria
-          cpus: '0.5'       # Reserva CPU
+    # Límites de recursos (ajustados para Orange Pi R2S)
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpu_count: 1
     
     # Healthcheck
     healthcheck:
@@ -83,25 +62,21 @@ services:
     networks:
       - esp32-network
     
-    # Privilegios (necesarios para acceso serial)
-    privileged: false
-    
-    # Capacidades específicas para serial
+    # Capacidades para acceso serial
     cap_add:
-      - SYS_ADMIN    # Para acceso a dispositivos
+      - SYS_ADMIN
     
     # Dependencias
     depends_on:
       - redis
     
-    # Labels para identificación
+    # Labels
     labels:
       - "esp32.component=api"
-      - "esp32.platform=emulated-x86_64"
       - "esp32.target=riscv-orangepi"
 
   # ═══════════════════════════════════════════════════════════════════════════
-  # REDIS (Opcional - Para cache avanzado)
+  # REDIS - Cache
   # ═══════════════════════════════════════════════════════════════════════════
   redis:
     image: redis:7-alpine
@@ -116,14 +91,8 @@ services:
     
     restart: unless-stopped
     
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.5'
-        reservations:
-          memory: 64M
-          cpus: '0.2'
+    # Límites de recursos
+    mem_limit: 128m
     
     networks:
       - esp32-network
@@ -131,85 +100,16 @@ services:
     labels:
       - "esp32.component=cache"
 
-  # ═══════════════════════════════════════════════════════════════════════════
-  # MONITORING (Opcional - Dashboard simple)
-  # ═══════════════════════════════════════════════════════════════════════════
-  monitoring:
-    image: portainer/portainer-ce:latest
-    container_name: esp32-monitoring
-    
-    ports:
-      - "9000:9000"
-    
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - portainer_data:/data
-    
-    restart: unless-stopped
-    
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-    
-    networks:
-      - esp32-network
-    
-    labels:
-      - "esp32.component=monitoring"
-
 # ═══════════════════════════════════════════════════════════════════════════
 # NETWORKS
 # ═══════════════════════════════════════════════════════════════════════════
 networks:
   esp32-network:
     driver: bridge
-    labels:
-      - "esp32.network=main"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # VOLUMES
 # ═══════════════════════════════════════════════════════════════════════════
 volumes:
   redis_data:
-    labels:
-      - "esp32.data=cache"
-  
-  portainer_data:
-    labels:
-      - "esp32.data=monitoring"
 
-# =============================================================================
-# 🔧 INSTRUCCIONES PARA CAMBIAR PUERTO SERIAL:
-# =============================================================================
-#
-# 1. Para /dev/ttyUSB0 (ESP32 por USB):
-#    devices:
-#      - "/dev/ttyUSB0:/dev/ttyUSB0"
-#    environment:
-#      - SERIAL_PORT=/dev/ttyUSB0
-#
-# 2. Para /dev/ttyACM0 (ESP32 por USB-CDC):
-#    devices:
-#      - "/dev/ttyACM0:/dev/ttyACM0" 
-#    environment:
-#      - SERIAL_PORT=/dev/ttyACM0
-#
-# 3. Para /dev/ttyS1, /dev/ttyS2, etc:
-#    devices:
-#      - "/dev/ttyS1:/dev/ttyS1"
-#    environment:
-#      - SERIAL_PORT=/dev/ttyS1
-#
-# 4. Para múltiples puertos (si tienes varios ESP32):
-#    devices:
-#      - "/dev/ttyUSB0:/dev/ttyUSB0"
-#      - "/dev/ttyUSB1:/dev/ttyUSB1"
-#    environment:
-#      - SERIAL_PORT=/dev/ttyUSB0  # Puerto principal
-#
-# 5. Verificar puertos disponibles en Orange Pi R2S:
-#    ls -la /dev/tty* | grep -E "(ttyS|ttyUSB|ttyACM)"
-#
-# =============================================================================
