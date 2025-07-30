@@ -46,8 +46,8 @@ services:
     restart: unless-stopped
     
     # Límites de recursos (ajustados para Orange Pi R2S)
-    mem_limit: 512m
-    memswap_limit: 512m
+    mem_limit: 1512m
+    memswap_limit: 1512m
     cpu_count: 1
     
     # Healthcheck
@@ -92,7 +92,7 @@ services:
     restart: unless-stopped
     
     # Límites de recursos
-    mem_limit: 128m
+    mem_limit: 1128m
     
     networks:
       - esp32-network
