@@ -5,6 +5,7 @@
 # Este archivo docker-compose.yml debe ser ubicado en ./API_cargador_gel_litio-/esp32_api_docker
 # cp docker-compose.yml ./API_cargador_gel_litio-/esp32_api_docker/docker-compose.yml
 
+
 version: '3.8'
 
 services:
@@ -12,7 +13,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # REMOVIDO: platforms (incompatible con versiones antiguas de docker-compose)
     
     image: esp32-solar-api:latest
     container_name: esp32-solar-charger-api
@@ -25,8 +25,14 @@ services:
     ports:
       - "8000:8000"  # API HTTP
     
-    # Variables de entorno
+    # ✅ CONFIGURACIÓN MULTI-CPU CORREGIDA (sintaxis compatible)
+    cpus: 4.0                    # Usar 4 CPUs (sintaxis v3.8)
+    mem_limit: 1512m             # Límite memoria
+    memswap_limit: 1512m         # Límite swap
+    
+    # ✅ VARIABLES DE ENTORNO CORREGIDAS
     environment:
+      # Configuración ESP32
       - SERIAL_PORT=/dev/ttyACM0
       - SERIAL_BAUDRATE=9600
       - SERIAL_TIMEOUT=3.0
@@ -38,6 +44,22 @@ services:
       - MAX_REQUESTS_PER_MINUTE=60
       - CACHE_TTL=2
       - TZ=America/Bogota
+      
+      # ✅ OPTIMIZACIONES MULTI-THREAD (NO QEMU_CPU)
+      - OMP_NUM_THREADS=4          # OpenMP threads
+      - MALLOC_ARENA_MAX=4         # Malloc arenas
+      - PYTHONTHREADS=4            # Python threads
+      - UV_THREADPOOL_SIZE=4       # libuv threadpool
+      - GOMAXPROCS=4               # Go max processes
+      
+      # ✅ OPTIMIZACIONES PYTHON
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONHASHSEED=0
+      
+      # ✅ OPTIMIZACIONES SISTEMA
+      - MALLOC_MMAP_THRESHOLD_=131072
+      - MALLOC_TRIM_THRESHOLD_=131072
     
     # Volúmenes para persistencia
     volumes:
@@ -47,11 +69,6 @@ services:
     
     # Política de reinicio
     restart: unless-stopped
-    
-    # Límites de recursos (ajustados para Orange Pi R2S)
-    mem_limit: 1512m
-    memswap_limit: 1512m
-    cpu_count: 1
     
     # Healthcheck
     healthcheck:
@@ -65,18 +82,24 @@ services:
     networks:
       - esp32-network
     
-    # Capacidades para acceso serial
-    cap_add:
-      - SYS_ADMIN
+    # ✅ CONFIGURACIÓN AVANZADA COMPATIBLE
+    security_opt:
+      - seccomp:unconfined
     
-    # Dependencias
-    depends_on:
-      - redis
+    # ✅ LÍMITES DE RECURSOS (sintaxis v3.8)
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc:
+        soft: 4096
+        hard: 4096
     
     # Labels
     labels:
       - "esp32.component=api"
-      - "esp32.target=riscv-orangepi"
+      - "esp32.optimization=multi-cpu"
+      - "esp32.cpus=4"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # REDIS - Cache
@@ -95,7 +118,7 @@ services:
     restart: unless-stopped
     
     # Límites de recursos
-    mem_limit: 1128m
+    mem_limit: 128m
     
     networks:
       - esp32-network
@@ -115,4 +138,3 @@ networks:
 # ═══════════════════════════════════════════════════════════════════════════
 volumes:
   redis_data:
-
