@@ -403,38 +403,60 @@ class ESP32Manager:
             logger.error(f"   Respuesta: {response[:200]}")
             return None
     
-    async def set_parameter(self, parameter: str, value: Any) -> bool:
+    async def set_parameter(self, parameter: str, value: Any) -> Dict[str, Any]:
         """
-        ✅ MÉTODO MEJORADO: Establecer parámetro con estrategias optimizadas
+        ✅ MÉTODO MEJORADO: Establecer parámetro con respuesta detallada
         """
+        result = {
+            "success": False,
+            "parameter": parameter,
+            "value": value,
+            "error": None,
+            "response": None
+        }
+        
         try:
             logger.info(f"⚙️ Configurando {parameter} = {value}")
             
             # Formatear comando según protocolo ESP32
             command = f"CMD:SET_{parameter}:{value}"
             
-            # ✅ MEJORA: Usar estrategias optimizadas con timeout más largo
-            if not self.lock.acquire(timeout=3.0):
-                logger.error("❌ Timeout obteniendo lock para configuración")
-                return False
-            
+            # ✅ MEJORA: Timeout más corto para evitar bloqueos
+            lock_acquired = False
             try:
-                response = await self._get_json_with_strategies(command, timeout=6.0)
+                lock_acquired = self.lock.acquire(timeout=2.0)
+                if not lock_acquired:
+                    result["error"] = "Timeout obteniendo lock para configuración"
+                    logger.error(f"❌ {result['error']}")
+                    return result
+                
+                # ✅ MEJORA: Timeout reducido para evitar colgado
+                response = await self._get_json_with_strategies(command, timeout=4.0)
+                result["response"] = response
+                
             finally:
-                self.lock.release()
+                if lock_acquired:
+                    self.lock.release()
             
             if response and ("OK:" in response or "success" in response.lower()):
                 logger.info(f"✅ {parameter} configurado exitosamente")
                 # ✅ Invalidar cache
                 self._last_data = None
-                return True
+                result["success"] = True
+                result["error"] = None
             else:
-                logger.error(f"❌ Error configurando {parameter}: {response}")
-                return False
+                error_msg = f"Respuesta inválida del ESP32: {response}"
+                result["error"] = error_msg
+                logger.error(f"❌ Error configurando {parameter}: {error_msg}")
                 
+        except asyncio.TimeoutError:
+            result["error"] = "Timeout comunicándose con ESP32"
+            logger.error(f"❌ Timeout configurando {parameter}")
         except Exception as e:
+            result["error"] = f"Excepción: {str(e)}"
             logger.error(f"❌ Excepción configurando {parameter}: {e}")
-            return False
+            
+        return result
     
     async def toggle_load(self, total_seconds: int) -> bool:
         """

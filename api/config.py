@@ -200,27 +200,29 @@ async def set_parameter(
             logger.warning("⚠️ ADVERTENCIA: El control manual de PWM puede afectar la carga automática")
         
         # Enviar al ESP32
-        success = await manager.set_parameter(parameter_name, validated_value)
+        esp32_result = await manager.set_parameter(parameter_name, validated_value)
         
-        if not success:
-            logger.error(f"❌ ESP32Manager retornó error para {parameter_name}")
+        if not esp32_result["success"]:
+            error_detail = esp32_result.get("error", "Error desconocido")
+            logger.error(f"❌ ESP32Manager retornó error para {parameter_name}: {error_detail}")
             raise HTTPException(
                 status_code=500, 
-                detail=f"Error configurando {parameter_name} en ESP32"
+                detail=f"Error configurando {parameter_name} en ESP32: {error_detail}"
             )
         
         # Invalidar cache relacionado
         data_cache.invalidate("all_data")
         data_cache.invalidate(f"param_{parameter_name}")
         
-        # Respuesta mejorada con información PWM
+        # Respuesta mejorada con información PWM y del ESP32
         response = {
             "success": True,
             "parameter": parameter_name,
             "original_value": config.value,
             "validated_value": validated_value,
             "value_type": type(validated_value).__name__,
-            "message": f"{parameter_name} configurado correctamente"
+            "message": f"{parameter_name} configurado correctamente",
+            "esp32_response": esp32_result.get("response", "OK")
         }
         
         # Agregar información adicional para PWM
@@ -399,19 +401,21 @@ async def set_multiple_parameters(
                 pwm_commands.append(f"{param_name}={validated_value}")
             
             # Configurar en ESP32
-            success = await manager.set_parameter(param_name, validated_value)
+            esp32_result = await manager.set_parameter(param_name, validated_value)
             
-            if success:
+            if esp32_result["success"]:
                 results[param_name] = {
                     "success": True,
                     "original_value": param_value,
-                    "validated_value": validated_value
+                    "validated_value": validated_value,
+                    "esp32_response": esp32_result.get("response", "OK")
                 }
                 successful += 1
             else:
                 results[param_name] = {
                     "success": False,
-                    "error": "Error comunicando con ESP32"
+                    "error": esp32_result.get("error", "Error comunicando con ESP32"),
+                    "esp32_response": esp32_result.get("response")
                 }
                 failed += 1
                 
@@ -480,10 +484,14 @@ async def pwm_control(
         logger.warning(f"🎛️ CONTROL PWM DIRECTO: {pwm_type} = {validated_value}")
         
         # Enviar al ESP32
-        success = await manager.set_parameter(parameter, validated_value)
+        esp32_result = await manager.set_parameter(parameter, validated_value)
         
-        if not success:
-            raise HTTPException(status_code=500, detail="Error enviando comando PWM al ESP32")
+        if not esp32_result["success"]:
+            error_detail = esp32_result.get("error", "Error desconocido")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Error enviando comando PWM al ESP32: {error_detail}"
+            )
         
         data_cache.invalidate("all_data")
         
