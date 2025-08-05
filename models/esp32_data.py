@@ -45,7 +45,7 @@ class ESP32Data(BaseModel):
     calculatedAbsorptionHours: float = Field(..., description="Horas absorción calculadas")
     currentBulkHours: float = Field(..., ge=0, description="Horas transcurridas en BULK actual")
     accumulatedAh: float = Field(..., description="Ah acumulados")
-    estimatedSOC: float = Field(..., ge=0, le=100, description="SOC estimado (%)")
+    estimatedSOC: float = Field(..., ge=-1, le=100, description="SOC estimado (% o -1 si no calculado)")
     netCurrent: float = Field(..., description="Corriente neta (mA)")
     factorDivider: int = Field(..., ge=1, le=10, description="Factor divisor")
     
