@@ -4,23 +4,24 @@ Modelos de datos para la API
 """
 
 # Modelos ESP32
-from .esp32_data import ESP32Data, ConfigParameter, ESP32Status
+from .esp32_data import ESP32Data, ConfigParameter, ChargeState, ToggleLoadRequest, ParameterInfo
 from .responses import (
-    ErrorResponse, 
-    SuccessResponse, 
-    ESP32Response,
-    ValidationErrorResponse
+    ErrorResponse,
+    APIResponse,
+    ParameterResponse,
+    BatchConfigResponse,
+    ConnectionStatus,
+    CacheStats,
+    HealthStatus
 )
-from .rate_limiting import RateLimit, RateLimitStats
+from .rate_limiting import RateLimitInfo, RateLimitStatus, RateLimitError, RateLimitStats
 
 # Modelos de Schedule
 from .schedule_models import (
-    ScheduleEntry,
-    ScheduleRequest,
-    ScheduleResponse,
-    ScheduleListResponse,
-    ScheduleStatus,
-    ScheduleUpdateRequest
+    ScheduleConfigRequest,
+    ScheduleStatusResponse,
+    ToggleLoadExtendedRequest,
+    ScheduleInfoResponse
 )
 
 # NUEVO: Modelos de Configuraciones Personalizadas
@@ -40,22 +41,31 @@ from .custom_configurations import (
 __all__ = [
     # ESP32 Models
     "ESP32Data",
-    "ConfigParameter", 
-    "ESP32Status",
+    "ConfigParameter",
+    "ChargeState",
+    "ToggleLoadRequest", 
+    "ParameterInfo",
+    
+    # Response Models
     "ErrorResponse",
-    "SuccessResponse",
-    "ESP32Response",
-    "ValidationErrorResponse",
-    "RateLimit",
+    "APIResponse",
+    "ParameterResponse",
+    "BatchConfigResponse",
+    "ConnectionStatus",
+    "CacheStats",
+    "HealthStatus",
+    
+    # Rate Limiting Models
+    "RateLimitInfo",
+    "RateLimitStatus", 
+    "RateLimitError",
     "RateLimitStats",
     
     # Schedule Models
-    "ScheduleEntry",
-    "ScheduleRequest", 
-    "ScheduleResponse",
-    "ScheduleListResponse",
-    "ScheduleStatus",
-    "ScheduleUpdateRequest",
+    "ScheduleConfigRequest",
+    "ScheduleStatusResponse",
+    "ToggleLoadExtendedRequest",
+    "ScheduleInfoResponse",
     
     # Custom Configuration Models
     "CustomConfiguration",

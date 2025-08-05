@@ -1,0 +1,13 @@
+{
+  "BateriaLitio200Ah": {
+    "batteryCapacity": 200.0,
+    "isLithium": true,
+    "thresholdPercentage": 2.0,
+    "maxAllowedCurrent": 15000.0,
+    "bulkVoltage": 14.4,
+    "absorptionVoltage": 14.4,
+    "floatVoltage": 13.6,
+    "useFuenteDC": false,
+    "fuenteDC_Amps": 0.0,
+    "factorDivider": 1,
+    "createdAt": 

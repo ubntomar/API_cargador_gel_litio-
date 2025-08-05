@@ -242,7 +242,7 @@ docker-compose logs  # Ver logs
 curl http://localhost:8000/
 
 # Verificar que la configuración se mantuvo
-curl http://localhost:8000/config/configurations
+curl http://localhost:8000/config/custom/configurations
 
 # Verificar logs por errores (desde esp32_api_docker/)
 cd esp32_api_docker
@@ -362,10 +362,10 @@ curl http://localhost:8000/actions/status
 ### 📋 **NUEVO**: Configuraciones Personalizadas
 ```bash
 # Listar todas las configuraciones guardadas
-curl http://localhost:8000/config/configurations
+curl http://localhost:8000/config/custom/configurations
 
 # Guardar configuración actual con un nombre
-curl -X POST http://localhost:8000/config/configurations/Batería%20Litio%20100Ah \
+curl -X POST http://localhost:8000/config/custom/configurations/Batería%20Litio%20100Ah \
   -H "Content-Type: application/json" \
   -d '{
     "batteryCapacity": 100.0,
@@ -381,13 +381,13 @@ curl -X POST http://localhost:8000/config/configurations/Batería%20Litio%20100A
   }'
 
 # Aplicar configuración guardada al ESP32
-curl -X POST http://localhost:8000/config/configurations/Batería%20Litio%20100Ah/apply
+curl -X POST http://localhost:8000/config/custom/configurations/Batería%20Litio%20100Ah/apply
 
 # Exportar todas las configuraciones para backup
-curl http://localhost:8000/config/configurations/export
+curl http://localhost:8000/config/custom/configurations/export
 
 # Importar configuraciones desde archivo JSON
-curl -X POST http://localhost:8000/config/configurations/import \
+curl -X POST http://localhost:8000/config/custom/configurations/import \
   -H "Content-Type: application/json" \
   -d '{
     "configurations_data": "{\"Nueva Config\":{\"batteryCapacity\":150,...}}",
@@ -395,7 +395,7 @@ curl -X POST http://localhost:8000/config/configurations/import \
   }'
 
 # Obtener información del sistema de configuraciones
-curl http://localhost:8000/config/configurations/info
+curl http://localhost:8000/config/custom/configurations/info
 ```
 
 ### 🔄 Gestión de Override
@@ -423,16 +423,16 @@ curl -X POST http://localhost:8000/schedule/disable
 | `/schedule/disable` | POST | Deshabilitar schedule |
 | `/schedule/clear_override` | POST | Limpiar override manual |
 | `/schedule/info` | GET | Info sobre capacidades |
-| `/config/configurations` | GET | Listar configuraciones guardadas |
-| `/config/configurations` | POST | Guardar múltiples configuraciones |
-| `/config/configurations/{name}` | POST | Guardar configuración individual |
-| `/config/configurations/{name}` | GET | Obtener configuración específica |
-| `/config/configurations/{name}` | DELETE | Eliminar configuración |
-| `/config/configurations/{name}/apply` | POST | Aplicar configuración al ESP32 |
-| `/config/configurations/validate` | POST | Validar configuración |
-| `/config/configurations/export` | GET | Exportar a JSON |
-| `/config/configurations/import` | POST | Importar desde JSON |
-| `/config/configurations/info` | GET | Info del sistema |
+| `/config/custom/configurations` | GET | Listar configuraciones guardadas |
+| `/config/custom/configurations` | POST | Guardar múltiples configuraciones |
+| `/config/custom/configurations/{name}` | POST | Guardar configuración individual |
+| `/config/custom/configurations/{name}` | GET | Obtener configuración específica |
+| `/config/custom/configurations/{name}` | DELETE | Eliminar configuración |
+| `/config/custom/configurations/{name}/apply` | POST | Aplicar configuración al ESP32 |
+| `/config/custom/configurations/validate` | POST | Validar configuración |
+| `/config/custom/configurations/export` | GET | Exportar a JSON |
+| `/config/custom/configurations/import` | POST | Importar desde JSON |
+| `/config/custom/configurations/info` | GET | Info del sistema |
 
 ## 🧪 Tests
 
@@ -848,7 +848,7 @@ cd API_cargador_gel_litio-
 
 # 3. Verificar nuevas funcionalidades
 curl http://localhost:8000/schedule/        # Nuevo sistema de schedule
-curl http://localhost:8000/config/configurations  # Nuevo sistema de configuraciones
+curl http://localhost:8000/config/custom/configurations  # Nuevo sistema de configuraciones
 
 # 4. Crear configuraciones iniciales basadas en tu setup actual
 curl http://localhost:8000/data/  # Ver configuración actual

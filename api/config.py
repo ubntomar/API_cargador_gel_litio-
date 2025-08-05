@@ -521,7 +521,7 @@ async def pwm_control(
 # NUEVO: ENDPOINTS PARA CONFIGURACIONES PERSONALIZADAS
 # ================================================================
 
-@router.post("/configurations", response_model=ConfigurationResponse)
+@router.post("/custom/configurations", response_model=ConfigurationResponse)
 async def save_configurations(config_data: ConfigurationData):
     """
     Guardar archivo de configuraciones personalizadas
@@ -549,7 +549,127 @@ async def save_configurations(config_data: ConfigurationData):
         logger.error(f"❌ Error guardando configuraciones: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.get("/configurations", response_model=ConfigurationsListResponse)
+# ============= RUTAS ESPECÍFICAS (antes de las dinámicas) =============
+@router.post("/custom/configurations/validate", response_model=ConfigurationValidationResponse)
+async def validate_configuration(request: ConfigurationRequest):
+    """
+    Validar una configuración
+    
+    Valida que una configuración tenga todos los parámetros
+    requeridos y valores válidos antes de guardarla.
+    """
+    try:
+        logger.info("🔍 Validando configuración...")
+        
+        result = await custom_config_manager.validate_configuration(request.configuration.dict())
+        
+        logger.info(f"✅ Validación completada: {'exitosa' if result.is_valid else 'falló'}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Error validando configuración: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@router.get("/custom/configurations/export", response_model=ConfigurationExportResponse)
+async def export_configurations():
+    """
+    Exportar configuraciones a JSON
+    
+    Genera un archivo JSON con todas las configuraciones
+    guardadas para portabilidad entre dispositivos.
+    """
+    try:
+        logger.info("📤 Exportando configuraciones...")
+        
+        content, count = await custom_config_manager.export_configurations()
+        
+        # Generar nombre de archivo con timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"configuraciones_backup_{timestamp}.json"
+        
+        logger.info(f"✅ Exportadas {count} configuraciones")
+        
+        return ConfigurationExportResponse(
+            filename=filename,
+            content=content,
+            configurations_count=count
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error exportando configuraciones: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@router.post("/custom/configurations/import", response_model=ConfigurationImportResponse)
+async def import_configurations(import_request: ConfigurationImportRequest):
+    """
+    Importar configuraciones desde JSON
+    
+    Importa configuraciones desde un archivo JSON exportado,
+    con opción de sobrescribir configuraciones existentes.
+    """
+    try:
+        logger.info("📥 Importando configuraciones...")
+        
+        result = await custom_config_manager.import_configurations(
+            import_request.configurations_data,
+            import_request.overwrite_existing
+        )
+        
+        logger.info(f"✅ Importación completada: {result.imported_count} importadas, " \
+                   f"{result.skipped_count} omitidas")
+        
+        return result
+        
+    except ValueError as ve:
+        logger.error(f"❌ Error de validación en importación: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"❌ Error importando configuraciones: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@router.get("/custom/configurations/info")
+async def get_configurations_info():
+    """
+    Obtener información del sistema de configuraciones
+    
+    Retorna información sobre el archivo de configuraciones,
+    estadísticas y estado del sistema.
+    """
+    try:
+        logger.info("ℹ️ Obteniendo información del sistema de configuraciones...")
+        
+        # Información del archivo
+        file_info = custom_config_manager.get_file_info()
+        
+        # Cargar configuraciones para estadísticas
+        configurations = await custom_config_manager.load_configurations()
+        
+        # Estadísticas básicas
+        stats = {
+            "total_configurations": len(configurations),
+            "configuration_names": list(configurations.keys()),
+            "lithium_configs": sum(1 for cfg in configurations.values() if cfg.get("isLithium", False)),
+            "gel_configs": sum(1 for cfg in configurations.values() if not cfg.get("isLithium", True))
+        }
+        
+        info = {
+            "file_info": file_info,
+            "statistics": stats,
+            "system_status": "operational"
+        }
+        
+        logger.info(f"✅ Información obtenida: {stats['total_configurations']} configuraciones")
+        
+        return info
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo información: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+# ============= RUTAS GENERALES =============
+@router.get("/custom/configurations", response_model=ConfigurationsListResponse)
 async def load_configurations():
     """
     Cargar archivo de configuraciones personalizadas
@@ -573,8 +693,9 @@ async def load_configurations():
         logger.error(f"❌ Error cargando configuraciones: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.post("/configurations/{configuration_name}", response_model=ConfigurationResponse)
-async def save_single_configuration(configuration_name: str, configuration: CustomConfiguration):
+# ============= RUTAS DINÁMICAS (después de las específicas) =============
+@router.post("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
+async def save_configuration(configuration_name: str, configuration: CustomConfiguration):
     """
     Guardar una configuración individual
     
@@ -586,7 +707,7 @@ async def save_single_configuration(configuration_name: str, configuration: Cust
         
         result = await custom_config_manager.save_single_configuration(
             configuration_name, 
-            configuration
+            configuration.dict()
         )
         
         logger.info(f"✅ Configuración '{configuration_name}' guardada exitosamente")
@@ -601,8 +722,8 @@ async def save_single_configuration(configuration_name: str, configuration: Cust
         logger.error(f"❌ Error guardando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.get("/configurations/{configuration_name}")
-async def get_single_configuration(configuration_name: str):
+@router.get("/custom/configurations/{configuration_name}")
+async def get_configuration(configuration_name: str):
     """
     Obtener una configuración específica
     
@@ -632,7 +753,7 @@ async def get_single_configuration(configuration_name: str):
         logger.error(f"❌ Error obteniendo configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.delete("/configurations/{configuration_name}", response_model=ConfigurationResponse)
+@router.delete("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
 async def delete_configuration(configuration_name: str):
     """
     Eliminar una configuración específica
@@ -659,7 +780,7 @@ async def delete_configuration(configuration_name: str):
         logger.error(f"❌ Error eliminando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.post("/configurations/{configuration_name}/apply", response_model=ConfigurationResponse)
+@router.post("/custom/configurations/{configuration_name}/apply", response_model=ConfigurationResponse)
 async def apply_configuration(
     configuration_name: str, 
     esp32_manager: ESP32Manager = Depends(get_esp32_manager)
@@ -751,122 +872,4 @@ async def apply_configuration(
         raise
     except Exception as e:
         logger.error(f"❌ Error aplicando configuración '{configuration_name}': {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-@router.post("/configurations/validate", response_model=ConfigurationValidationResponse)
-async def validate_configuration(configuration: CustomConfiguration):
-    """
-    Validar una configuración
-    
-    Valida que una configuración tenga todos los parámetros
-    requeridos y valores válidos antes de guardarla.
-    """
-    try:
-        logger.info("🔍 Validando configuración...")
-        
-        result = await custom_config_manager.validate_configuration(configuration.dict())
-        
-        logger.info(f"✅ Validación completada: {'exitosa' if result.is_valid else 'falló'}")
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"❌ Error validando configuración: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-@router.get("/configurations/export", response_model=ConfigurationExportResponse)
-async def export_configurations():
-    """
-    Exportar configuraciones a JSON
-    
-    Genera un archivo JSON con todas las configuraciones
-    guardadas para portabilidad entre dispositivos.
-    """
-    try:
-        logger.info("📤 Exportando configuraciones...")
-        
-        content, count = await custom_config_manager.export_configurations()
-        
-        # Generar nombre de archivo con timestamp
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"configuraciones_backup_{timestamp}.json"
-        
-        logger.info(f"✅ Exportadas {count} configuraciones")
-        
-        return ConfigurationExportResponse(
-            filename=filename,
-            content=content,
-            configurations_count=count
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Error exportando configuraciones: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-@router.post("/configurations/import", response_model=ConfigurationImportResponse)
-async def import_configurations(import_request: ConfigurationImportRequest):
-    """
-    Importar configuraciones desde JSON
-    
-    Importa configuraciones desde un archivo JSON exportado,
-    con opción de sobrescribir configuraciones existentes.
-    """
-    try:
-        logger.info("📥 Importando configuraciones...")
-        
-        result = await custom_config_manager.import_configurations(
-            import_request.configurations_data,
-            import_request.overwrite_existing
-        )
-        
-        logger.info(f"✅ Importación completada: {result.imported_count} importadas, " \
-                   f"{result.skipped_count} omitidas")
-        
-        return result
-        
-    except ValueError as ve:
-        logger.error(f"❌ Error de validación en importación: {ve}")
-        raise HTTPException(status_code=400, detail=str(ve))
-    except Exception as e:
-        logger.error(f"❌ Error importando configuraciones: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-@router.get("/configurations/info")
-async def get_configurations_info():
-    """
-    Obtener información del sistema de configuraciones
-    
-    Retorna información sobre el archivo de configuraciones,
-    estadísticas y estado del sistema.
-    """
-    try:
-        logger.info("ℹ️ Obteniendo información del sistema de configuraciones...")
-        
-        # Información del archivo
-        file_info = custom_config_manager.get_file_info()
-        
-        # Cargar configuraciones para estadísticas
-        configurations = await custom_config_manager.load_configurations()
-        
-        # Estadísticas básicas
-        stats = {
-            "total_configurations": len(configurations),
-            "configuration_names": list(configurations.keys()),
-            "lithium_configs": sum(1 for cfg in configurations.values() if cfg.get("isLithium", False)),
-            "gel_configs": sum(1 for cfg in configurations.values() if not cfg.get("isLithium", True))
-        }
-        
-        info = {
-            "file_info": file_info,
-            "statistics": stats,
-            "system_status": "operational"
-        }
-        
-        logger.info(f"✅ Información obtenida: {stats['total_configurations']} configuraciones")
-        
-        return info
-        
-    except Exception as e:
-        logger.error(f"❌ Error obteniendo información: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
