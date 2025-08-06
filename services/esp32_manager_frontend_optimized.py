@@ -20,7 +20,6 @@ class ESP32Manager:
         self.port = port
         self.baudrate = baudrate
         self.serial_conn = None
-        self.connected = False  # ✅ CORRECCIÓN: Atributo faltante para compatibilidad
         self.lock = threading.Lock()  # ✅ CORRECCIÓN: Lock thread-safe para concurrencia real
         self._last_data = None
         self._last_data_time = 0
@@ -70,11 +69,9 @@ class ESP32Manager:
                 
                 # Probar comunicación
                 if await self._test_communication():
-                    self.connected = True  # ✅ CORRECCIÓN: Marcar como conectado
                     logger.info(f"✅ Conectado al ESP32 en {self.port}")
                     return True
                 else:
-                    self.connected = False
                     if self.serial_conn:
                         self.serial_conn.close()
                         
@@ -349,19 +346,13 @@ class ESP32Manager:
             response = await self._get_json_with_strategies("CMD:GET_DATA")
             
             if response and self._is_json_complete(response):
-                # ✅ CORRECCIÓN: Parsear JSON response a diccionario
-                parsed_data = self._parse_data_response(response)
-                if parsed_data:
-                    # Actualizar cache
-                    self._last_data = parsed_data
-                    self._last_data_time = current_time
-                    self._communication_errors = 0  # Reset counter on success
-                    
-                    logger.info(f"✅ Datos ESP32 obtenidos exitosamente (cached por {self._cache_duration}s)")
-                    return parsed_data
-                else:
-                    logger.warning("⚠️ Error parseando respuesta del ESP32")
-                    return self._last_data if self._last_data else None
+                # Actualizar cache
+                self._last_data = response
+                self._last_data_time = current_time
+                self._communication_errors = 0  # Reset counter on success
+                
+                logger.info(f"✅ Datos ESP32 obtenidos exitosamente (cached por {self._cache_duration}s)")
+                return response
             else:
                 logger.warning("⚠️ Respuesta incompleta del ESP32")
                 # Usar cache si existe
@@ -502,15 +493,8 @@ class ESP32Manager:
             self._last_set_command_time = time.time()
             logger.debug(f"🔒 Lock adquirido para configurar {parameter}")
             
-            # ✅ CONVERSIÓN: ESP32 necesita 1/0 para booleanos, no True/False
-            esp32_value = value
-            if isinstance(value, bool):
-                esp32_value = 1 if value else 0
-                logger.debug(f"🔄 Convirtiendo valor booleano: {value} → {esp32_value}")
-            
-            # ✅ CORRECCIÓN CRÍTICA: ESP32 espera nombres exactos, NO en mayúsculas
-            # El ESP32 busca "useFuenteDC", no "USEFUENTEDC"
-            command = f"CMD:SET_{parameter}:{esp32_value}"
+            # Construir comando
+            command = f"CMD:SET_{parameter.upper()}:{value}"
             
             # ✅ PROTOCOLO SEPARADO: Usar texto plano para comandos SET
             response = await self._send_command_and_read_text(command, timeout=6.0)
@@ -559,7 +543,6 @@ class ESP32Manager:
             if self.serial_conn and self.serial_conn.is_open:
                 self.serial_conn.close()
                 logger.info("✅ Puerto serial cerrado")
-            self.connected = False  # ✅ CORRECCIÓN: Marcar como desconectado
         except Exception as e:
             logger.error(f"❌ Error cerrando puerto serial: {e}")
         

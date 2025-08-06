@@ -813,7 +813,7 @@ async def apply_configuration(
             )
         
         # Verificar conexión ESP32
-        if not esp32_manager or not esp32_manager.is_connected():
+        if not esp32_manager or not esp32_manager.connected:
             raise HTTPException(
                 status_code=503, 
                 detail="ESP32 no está conectado"

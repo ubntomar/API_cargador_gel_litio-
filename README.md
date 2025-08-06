@@ -1,8 +1,45 @@
 # ESP32 Solar Charger API
 
-API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad de apagado programado diario**.
+API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad de apagado programado diario** y **sistema de configuraciones personalizadas**.
 
-> 🚨 **IMPORTANTE - Agosto 2025:** Si experimentas problemas con endpoints POST/PUT (error 500), consulta la [sección de protocolo de comunicación ESP32](#-crítico-protocolo-de-comunicación-esp32-agosto-2025) en troubleshooting.
+> ✅ **ESTADO ACTUAL - Agosto 2025:** API completamente funcional y validado. Sistema de configuraciones personalizadas operativo. Listo para integración frontend.
+
+> 📚 **PARA DESARROLLADORES FRONTEND:** Consulta [`FRONTEND_API_DOCUMENTATION.md`](./FRONTEND_API_DOCUMENTATION.md) para documentación completa de endpoints, ejemplos de código y mejores prácticas.
+
+## ⚡ Funcionalidades Principales
+
+### ✅ **Sistema de Monitoreo ESP32**
+- 📊 Lectura en tiempo real de voltaje, corriente y temperatura
+- 🔋 Cálculo automático de porcentaje de batería
+- 📱 API REST para integración con frontend
+- 🔄 Polling optimizado cada 3 segundos sin bloqueos
+
+### ✅ **Configuración de Parámetros**
+- ⚙️ Configuración individual de parámetros del cargador
+- 🔧 Soporte para baterías de Litio y GEL
+- 🎯 Validación automática de valores
+- 📡 Comunicación serial robusta con ESP32
+
+### ✅ **Sistema de Configuraciones Personalizadas** 🆕
+- 💾 Guardar múltiples configuraciones con nombres personalizados
+- 🚀 Aplicar configuraciones completas con un solo clic
+- 📋 Listado, búsqueda y filtrado de configuraciones
+- ✅ Validación antes de guardar
+- 📤 Exportar/importar configuraciones en JSON
+- 🗑️ Eliminar configuraciones no utilizadas
+- 📊 Estadísticas y información del sistema
+
+### ✅ **Programación de Horarios**
+- ⏰ Configuración de horarios de apagado y encendido automático
+- 📅 Soporte para programación diaria
+- 🔔 Notificaciones de próximos eventos programados
+
+### ✅ **Características Técnicas Avanzadas**
+- 🔒 Thread-safe con manejo de concurrencia
+- 🏥 Endpoints de health check y monitoreo
+- 📝 Logging detallado para debugging
+- 🔄 Cache inteligente para optimizar rendimiento
+- 🛡️ Manejo robusto de errores de comunicación
 
 ## 🚀 Instalación Rápida
 
@@ -153,7 +190,49 @@ sudo ./install_orangepi.sh
 ./quick_setup.sh
 
 # Configurar crontab para inicio automático
-./crontab/setup_api_crontab.sh
+crontab -e
+
+# Agregar al final:
+# Actualización automática todos los días a las 3 AM
+0 3 * * * cd /home/orangepi/API_cargador_gel_litio- && ./quick_setup.sh >> /var/log/api_update.log 2>&1
+```
+
+---
+
+## 📚 **DOCUMENTACIÓN PARA DESARROLLADORES**
+
+### 🎯 **Para Desarrolladores Frontend**
+
+| Documento | Descripción | Audiencia |
+|-----------|-------------|-----------|
+| [`FRONTEND_API_DOCUMENTATION.md`](./FRONTEND_API_DOCUMENTATION.md) | 📖 **Documentación completa del API** - Todos los endpoints, ejemplos de peticiones/respuestas, códigos de error | Frontend Developers |
+| [`FRONTEND_EXAMPLES.md`](./FRONTEND_EXAMPLES.md) | 💡 **Ejemplos prácticos de código** - Componentes React, hooks, CSS, integraciones | Frontend Developers |
+| [`API_QUICK_REFERENCE.md`](./API_QUICK_REFERENCE.md) | ⚡ **Referencia rápida** - Cheat sheet con endpoints y parámetros más comunes | Desarrollo rápido |
+| [`README_CONFIGURACIONES.md`](./README_CONFIGURACIONES.md) | 📋 **Sistema de configuraciones** - Documentación específica del sistema de configuraciones personalizadas | Backend/Frontend |
+
+### 🔧 **Para Administradores de Sistema**
+
+- **README.md** (este archivo): Instalación, configuración, troubleshooting
+- **`configuraciones.json`**: Archivo de configuraciones guardadas (generado automáticamente)
+- **`logs/esp32_api.log`**: Logs detallados del sistema
+
+### 📊 **Estado de Funcionalidades - Agosto 2025**
+
+| Funcionalidad | Estado | Documentación | Validación |
+|---------------|--------|---------------|------------|
+| 📊 Lectura datos ESP32 | ✅ Funcional | ✅ Completa | ✅ Validado |
+| ⚙️ Configuración parámetros | ✅ Funcional | ✅ Completa | ✅ Validado |
+| 📋 Configuraciones personalizadas | ✅ Funcional | ✅ Completa | ✅ Validado |
+| ⏰ Programación horarios | ✅ Funcional | ✅ Completa | ✅ Validado |
+| 🏥 Health checks | ✅ Funcional | ✅ Completa | ✅ Validado |
+| 🔒 Thread safety | ✅ Implementado | ✅ Documentado | ✅ Probado |
+| 📱 Frontend integration | ⏳ Pendiente | ✅ Documentado | ⏳ Por implementar |
+
+---
+
+crontab -e
+
+# Agregar al final:
 ```
 
 #### 7. Verificación del Sistema

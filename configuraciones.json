@@ -2,15 +2,29 @@
   "BateriaLitio200Ah": {
     "batteryCapacity": 200.0,
     "isLithium": true,
-    "thresholdPercentage": 2.0,
+    "thresholdPercentage": 3.0,
     "maxAllowedCurrent": 15000.0,
-    "bulkVoltage": 14.4,
-    "absorptionVoltage": 14.4,
-    "floatVoltage": 13.6,
+    "bulkVoltage": 14.6,
+    "absorptionVoltage": 14.6,
+    "floatVoltage": 13.8,
     "useFuenteDC": false,
     "fuenteDC_Amps": 0.0,
     "factorDivider": 1,
     "createdAt": "2024-01-01T00:00:00",
-    "updatedAt": "2024-01-01T00:00:00"
+    "updatedAt": "2025-08-06T10:39:25"
+  },
+  "Batería GEL 100Ah": {
+    "batteryCapacity": 100.0,
+    "isLithium": false,
+    "thresholdPercentage": 2.5,
+    "maxAllowedCurrent": 5000.0,
+    "bulkVoltage": 14.4,
+    "absorptionVoltage": 14.4,
+    "floatVoltage": 13.6,
+    "useFuenteDC": true,
+    "fuenteDC_Amps": 10.0,
+    "factorDivider": 2,
+    "createdAt": "2025-08-06T10:38:42",
+    "updatedAt": "2025-08-06T10:38:42"
   }
 }
