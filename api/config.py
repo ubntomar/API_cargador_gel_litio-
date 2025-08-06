@@ -713,9 +713,10 @@ async def save_configuration(configuration_name: str, configuration: CustomConfi
     try:
         logger.info(f"💾 Guardando configuración individual: {configuration_name}")
         
+        # ✅ CORRECCIÓN: Pasar el objeto CustomConfiguration directamente, no .dict()
         result = await custom_config_manager.save_single_configuration(
             configuration_name, 
-            configuration.dict()
+            configuration
         )
         
         logger.info(f"✅ Configuración '{configuration_name}' guardada exitosamente")

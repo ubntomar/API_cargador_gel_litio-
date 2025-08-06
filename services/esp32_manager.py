@@ -403,9 +403,52 @@ class ESP32Manager:
             logger.error(f"   Respuesta: {response[:200]}")
             return None
     
+    async def _send_command_and_read_text(self, command: str, timeout: float = 5.0) -> Optional[str]:
+        """
+        ✅ NUEVO: Enviar comando y leer respuesta de texto plano (no JSON)
+        Específico para comandos SET que devuelven texto simple
+        """
+        if not self.serial_conn or not self.serial_conn.is_open:
+            return None
+            
+        try:
+            # Enviar comando
+            if not await self._send_command_simple(command):
+                return None
+                
+            # Pausa para procesamiento
+            await asyncio.sleep(0.3)
+            
+            # Leer respuesta línea por línea (texto plano)
+            start_time = time.time()
+            response = ""
+            
+            while (time.time() - start_time) < timeout:
+                if self.serial_conn.in_waiting > 0:
+                    chunk = self.serial_conn.read(self.serial_conn.in_waiting)
+                    if chunk:
+                        chunk_str = chunk.decode('utf-8', errors='replace')
+                        response += chunk_str
+                        
+                        # Buscar final de línea
+                        if '\n' in response or '\r' in response:
+                            # Limpiar respuesta
+                            response = response.replace('\r', '').replace('\n', '').strip()
+                            logger.debug(f"📨 Respuesta texto ESP32: {response}")
+                            return response
+                            
+                await asyncio.sleep(0.01)
+                
+            return response.strip() if response else None
+            
+        except Exception as e:
+            logger.error(f"❌ Error leyendo respuesta texto: {e}")
+            return None
+
     async def set_parameter(self, parameter: str, value: Any) -> Dict[str, Any]:
         """
         ✅ MÉTODO MEJORADO: Establecer parámetro con respuesta detallada
+        Maneja respuestas de texto plano del ESP32
         """
         result = {
             "success": False,
@@ -430,24 +473,34 @@ class ESP32Manager:
                     logger.error(f"❌ {result['error']}")
                     return result
                 
-                # ✅ MEJORA: Timeout reducido para evitar colgado
-                response = await self._get_json_with_strategies(command, timeout=4.0)
+                # ✅ CORRECCIÓN: Usar método específico para texto plano
+                response = await self._send_command_and_read_text(command, timeout=4.0)
                 result["response"] = response
                 
             finally:
                 if lock_acquired:
                     self.lock.release()
             
-            if response and ("OK:" in response or "success" in response.lower()):
-                logger.info(f"✅ {parameter} configurado exitosamente")
-                # ✅ Invalidar cache
-                self._last_data = None
-                result["success"] = True
-                result["error"] = None
+            # ✅ MEJORA: Validación más específica para respuestas del ESP32
+            if response:
+                if response.startswith("OK:"):
+                    logger.info(f"✅ {parameter} configurado exitosamente: {response}")
+                    # ✅ Invalidar cache
+                    self._last_data = None
+                    result["success"] = True
+                    result["error"] = None
+                elif response.startswith("ERROR:"):
+                    error_msg = f"Error del ESP32: {response}"
+                    result["error"] = error_msg
+                    logger.error(f"❌ Error configurando {parameter}: {error_msg}")
+                else:
+                    error_msg = f"Respuesta inesperada del ESP32: {response}"
+                    result["error"] = error_msg
+                    logger.warning(f"⚠️ Respuesta no estándar para {parameter}: {error_msg}")
             else:
-                error_msg = f"Respuesta inválida del ESP32: {response}"
+                error_msg = "Sin respuesta del ESP32"
                 result["error"] = error_msg
-                logger.error(f"❌ Error configurando {parameter}: {error_msg}")
+                logger.error(f"❌ Sin respuesta configurando {parameter}")
                 
         except asyncio.TimeoutError:
             result["error"] = "Timeout comunicándose con ESP32"

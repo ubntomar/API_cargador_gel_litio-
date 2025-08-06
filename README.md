@@ -2,6 +2,8 @@
 
 API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad de apagado programado diario**.
 
+> 🚨 **IMPORTANTE - Agosto 2025:** Si experimentas problemas con endpoints POST/PUT (error 500), consulta la [sección de protocolo de comunicación ESP32](#-crítico-protocolo-de-comunicación-esp32-agosto-2025) en troubleshooting.
+
 ## 🚀 Instalación Rápida
 
 ### 💻 Instalación Estándar (x86/x64)
@@ -599,6 +601,60 @@ curl http://localhost:8000/health
 tail -f logs/esp32_api.log
 ```
 
+#### 🔧 **CRÍTICO: Protocolo de Comunicación ESP32 (Agosto 2025)**
+
+**PROBLEMA IDENTIFICADO:** Los comandos SET (POST/PUT) fallan con error 500 o "Respuesta inválida del ESP32: None"
+
+**CAUSA RAÍZ:** 
+- Los comandos `GET_DATA` devuelven JSON completo
+- Los comandos `SET_*` devuelven texto plano: `"OK:parameter updated to value"`
+- La API originalmente esperaba JSON para todos los comandos
+
+**SÍNTOMAS:**
+```bash
+# ❌ FALLA: Endpoints de configuración
+curl -X PUT http://localhost:8000/config/bulkVoltage -H "Content-Type: application/json" -d '{"value": 14.6}'
+# Error: "Respuesta inválida del ESP32: None"
+
+# ✅ FUNCIONA: Endpoint de datos
+curl http://localhost:8000/data/
+# Devuelve JSON completo
+```
+
+**SOLUCIÓN IMPLEMENTADA:**
+- **Archivo:** `services/esp32_manager.py`
+- **Método nuevo:** `_send_command_and_read_text()` para respuestas de texto plano
+- **Método modificado:** `set_parameter()` usa texto plano en lugar de JSON
+- **Validación:** Busca `"OK:"` o `"ERROR:"` en respuestas de texto
+
+**CÓDIGO CRÍTICO:**
+```python
+# ✅ CORRECTO - Para comandos SET
+response = await self._send_command_and_read_text(command, timeout=4.0)
+if response and response.startswith("OK:"):
+    result["success"] = True
+
+# ✅ CORRECTO - Para comandos GET_DATA  
+response = await self._get_json_with_strategies("CMD:GET_DATA")
+if response and self._is_json_complete(response):
+    return response
+```
+
+**VERIFICACIÓN DEL FIX:**
+```bash
+# ✅ Debe funcionar después del fix
+curl -X PUT http://localhost:8000/config/bulkVoltage -H "Content-Type: application/json" -d '{"value": 14.6}'
+# Respuesta esperada: {"success":true,"esp32_response":"OK:bulkVoltage updated to 14.6"}
+```
+
+**⚠️ IMPORTANTE PARA FUTURO:**
+1. **NO mezclar** métodos JSON y texto plano en el mismo endpoint
+2. Los comandos SET siempre usan `_send_command_and_read_text()`
+3. Los comandos GET siempre usan `_get_json_with_strategies()`
+4. Si cambias el firmware ESP32, mantén consistencia en el protocolo
+
+---
+
 ### 🍊 Problemas Específicos Orange Pi R2S / RISC-V
 
 #### Puerto Serial no funciona
@@ -1044,6 +1100,42 @@ docker-compose up -d
 - [ ] ✅ Verificar que la API actual funciona: `curl http://localhost:8000/health`
 - [ ] ✅ Anotar versión actual: `git log --oneline -1`
 - [ ] ✅ Verificar espacio en disco: `df -h`
+
+---
+
+## 📋 Historial de Cambios Críticos
+
+### 🚨 **Agosto 2025 - Fix Protocolo Comunicación ESP32**
+
+**Problema:** Comandos SET (POST/PUT) fallaban con error 500 - "Respuesta inválida del ESP32: None"
+
+**Solución:** 
+- **Archivo modificado:** `services/esp32_manager.py`
+- **Cambios:** Separación de protocolos JSON vs texto plano
+- **Nuevo método:** `_send_command_and_read_text()` para comandos SET
+- **Resultado:** 100% endpoints POST/PUT funcionando
+
+**Detalles técnicos:**
+```diff
+# ❌ ANTES - Todos los comandos esperaban JSON
+response = await self._get_json_with_strategies(command, timeout=4.0)
+
+# ✅ DESPUÉS - Comandos SET usan texto plano
+response = await self._send_command_and_read_text(command, timeout=4.0)
+```
+
+**Archivos afectados:**
+- `services/esp32_manager.py` - Protocolo de comunicación
+- `README.md` - Documentación del fix
+
+**Testing realizado:**
+- ✅ Endpoints GET: `/data/` funcionando
+- ✅ Endpoints PUT: `/config/bulkVoltage`, `/config/batteryCapacity`, `/config/thresholdPercentage`
+- ✅ Sin regresiones en funcionalidad existente
+
+**Nota crítica:** Este fix es fundamental para el correcto funcionamiento de todos los endpoints de configuración. No modificar sin entender completamente la diferencia entre protocolos JSON y texto plano del ESP32.
+
+---
 
 **Durante la Actualización:**
 - [ ] ✅ Ejecutar `./quick_setup.sh` o proceso manual
