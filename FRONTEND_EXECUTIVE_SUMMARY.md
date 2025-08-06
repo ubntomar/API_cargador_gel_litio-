@@ -13,9 +13,10 @@
 
 ### 1. 📊 **Datos en Tiempo Real**
 ```http
-GET /data
+GET /data/
 ```
 - **Función:** Obtener todos los datos actuales del ESP32
+- **URL:** `http://localhost:8000/data/` ⚠️ DEBE incluir barra final
 - **Frecuencia:** Cada 3 segundos (polling)
 - **Datos clave:** voltaje, porcentaje batería, temperatura, estado carga
 
@@ -79,7 +80,8 @@ const [data, setData] = useState(null);
 
 useEffect(() => {
   const fetchData = async () => {
-    const response = await fetch('http://localhost:8000/data');
+    // IMPORTANTE: usar /data/ con barra final
+    const response = await fetch('http://localhost:8000/data/');
     setData(await response.json());
   };
   
@@ -88,7 +90,7 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, []);
 
-// Uso: data.batteryVoltage, data.batteryPercentage, etc.
+// Uso: data.voltageBatterySensor2, data.estimatedSOC, data.chargeState, etc.
 ```
 
 ### Configurar Parámetro
@@ -124,14 +126,22 @@ const applyConfig = async (name) => {
 
 | Campo | Tipo | Descripción | Unidad |
 |-------|------|-------------|--------|
-| `batteryVoltage` | number | Voltaje actual | V |
-| `batteryPercentage` | number | Porcentaje carga | % |
+| `voltageBatterySensor2` | number | Voltaje batería | V |
+| `estimatedSOC` | number | Porcentaje carga estimado | % |
 | `batteryCapacity` | number | Capacidad total | Ah |
-| `isCharging` | boolean | Estado de carga | - |
-| `chargingCurrent` | number | Corriente actual | A |
-| `temperatureC` | number | Temperatura | °C |
+| `chargeState` | string | Estado de carga (BULK_CHARGE, ABSORPTION_CHARGE, FLOAT_CHARGE) | - |
+| `panelToBatteryCurrent` | number | Corriente panel a batería | mA |
+| `batteryToLoadCurrent` | number | Corriente batería a carga | mA |
+| `netCurrent` | number | Corriente neta | mA |
+| `temperature` | number | Temperatura | °C |
+| `currentPWM` | number | Valor PWM actual | 0-255 |
+| `voltagePanel` | number | Voltaje panel solar | V |
 | `isLithium` | boolean | Tipo batería | - |
 | `useFuenteDC` | boolean | Fuente DC activa | - |
+| `fuenteDC_Amps` | number | Amperaje fuente DC | A |
+| `connected` | boolean | Conexión ESP32 activa | - |
+| `firmware_version` | string | Versión firmware | - |
+| `last_update` | string | Última actualización | ISO DateTime |
 
 ---
 

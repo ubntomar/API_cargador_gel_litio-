@@ -7,6 +7,12 @@
 **Formato de datos:** JSON
 **Autenticación:** Sin autenticación (desarrollo local)
 
+**📝 Nota sobre URLs:**
+- El endpoint de datos DEBE usar barra final: `/data/` ✅
+- NO usar `/data` sin barra final ❌ (no funciona)
+- Otros endpoints funcionan con o sin barra final
+- Los ejemplos usan la forma correcta que funciona
+
 ---
 
 ## 🔋 **1. ENDPOINTS DE DATOS DEL ESP32**
@@ -14,31 +20,61 @@
 ### 📊 Obtener Datos Actuales del ESP32
 
 ```http
-GET /data
+GET /data/
 ```
 
 **Descripción:** Obtiene todos los datos actuales del cargador solar ESP32
 
+**URL completa:** `http://localhost:8000/data/`
+**⚠️ IMPORTANTE:** Debe incluir la barra final `/data/` - `/data` sin barra NO funciona
+
 **Respuesta de éxito (200):**
 ```json
 {
-  "batteryVoltage": 12.45,
-  "batteryPercentage": 85.3,
-  "batteryCapacity": 100.0,
-  "isCharging": true,
-  "chargingCurrent": 5.2,
-  "temperatureC": 25.4,
-  "temperatureF": 77.7,
-  "isLithium": false,
-  "thresholdPercentage": 2.5,
-  "maxAllowedCurrent": 10000.0,
+  "panelToBatteryCurrent": 5200.0,
+  "batteryToLoadCurrent": 3000.0,
+  "voltagePanel": 18.5,
+  "voltageBatterySensor2": 12.45,
+  "currentPWM": 128,
+  "temperature": 25.4,
+  "chargeState": "BULK_CHARGE",
   "bulkVoltage": 14.4,
   "absorptionVoltage": 14.4,
   "floatVoltage": 13.6,
+  "LVD": 11.5,
+  "LVR": 12.0,
+  "batteryCapacity": 100.0,
+  "thresholdPercentage": 2.5,
+  "maxAllowedCurrent": 10000.0,
+  "isLithium": false,
+  "maxBatteryVoltageAllowed": 15.0,
+  "absorptionCurrentThreshold_mA": 2500.0,
+  "currentLimitIntoFloatStage": 1000.0,
+  "calculatedAbsorptionHours": 2.5,
+  "currentBulkHours": 1.2,
+  "accumulatedAh": 15.5,
+  "estimatedSOC": 85.3,
+  "netCurrent": 2200.0,
+  "factorDivider": 1,
   "useFuenteDC": true,
   "fuenteDC_Amps": 10.0,
-  "factorDivider": 1,
-  "timestamp": "2025-08-06T10:45:23.123456"
+  "maxBulkHours": 6.0,
+  "panelSensorAvailable": true,
+  "maxAbsorptionHours": 4.0,
+  "chargedBatteryRestVoltage": 13.8,
+  "reEnterBulkVoltage": 12.8,
+  "pwmFrequency": 1000,
+  "tempThreshold": 40,
+  "temporaryLoadOff": false,
+  "loadOffRemainingSeconds": 0,
+  "loadOffDuration": 0,
+  "loadControlState": true,
+  "ledSolarState": true,
+  "notaPersonalizada": "Sistema funcionando correctamente",
+  "connected": true,
+  "firmware_version": "v2.1.0",
+  "uptime": 1234567,
+  "last_update": "2025-08-06T10:45:23.123456"
 }
 ```
 
@@ -443,7 +479,7 @@ GET /redoc
 // Obtener datos cada 3 segundos
 const fetchESP32Data = async () => {
   try {
-    const response = await fetch('http://localhost:8000/data');
+    const response = await fetch('http://localhost:8000/data/');
     if (response.ok) {
       const data = await response.json();
       updateUI(data);

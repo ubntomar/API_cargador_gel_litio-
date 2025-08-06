@@ -250,6 +250,81 @@ async def set_parameter(
         logger.error(f"❌ Error inesperado configurando {parameter_name}: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
 
+@router.post("/parameter")
+async def set_parameter_post(
+    request: dict,
+    _: None = Depends(check_config_rate_limit),
+    manager: ESP32Manager = Depends(get_esp32_manager)
+):
+    """Configurar un parámetro usando POST - Compatible con Frontend"""
+    try:
+        # Extraer parameter y value del request body
+        if "parameter" not in request or "value" not in request:
+            raise HTTPException(
+                status_code=400, 
+                detail="Request body debe contener 'parameter' y 'value'"
+            )
+        
+        parameter_name = request["parameter"]
+        value = request["value"]
+        
+        logger.info(f"🔧 Solicitud POST /parameter: {parameter_name} = {value} (tipo: {type(value)})")
+        
+        # Reutilizar la lógica de validación existente
+        try:
+            validated_value = validate_parameter_value(parameter_name, value)
+        except ValueError as ve:
+            logger.error(f"❌ Error de validación para {parameter_name}: {ve}")
+            raise HTTPException(status_code=400, detail=str(ve))
+        
+        logger.info(f"✅ Valor validado: {parameter_name} = {validated_value} (tipo: {type(validated_value)})")
+        
+        # Verificar conexión ESP32
+        if not manager.connected:
+            logger.error(f"❌ ESP32Manager no está conectado")
+            raise HTTPException(
+                status_code=503, 
+                detail="ESP32 no está conectado. Verifica la conexión serial."
+            )
+        
+        # Logging especial para PWM
+        if parameter_name in ["currentPWM", "pwmPercentage"]:
+            logger.warning(f"🎛️ CONTROL PWM: {parameter_name} = {validated_value}")
+            logger.warning("⚠️ ADVERTENCIA: El control manual de PWM puede afectar la carga automática")
+        
+        # Enviar al ESP32
+        esp32_result = await manager.set_parameter(parameter_name, validated_value)
+        
+        if not esp32_result["success"]:
+            error_detail = esp32_result.get("error", "Error desconocido")
+            logger.error(f"❌ ESP32Manager retornó error para {parameter_name}: {error_detail}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Error configurando {parameter_name} en ESP32: {error_detail}"
+            )
+        
+        # Invalidar cache relacionado
+        data_cache.invalidate("all_data")
+        data_cache.invalidate(f"param_{parameter_name}")
+        
+        # Respuesta compatible con frontend
+        response = {
+            "success": True,
+            "parameter": parameter_name,
+            "value": validated_value,
+            "esp32_response": esp32_result.get("response", "OK"),
+            "message": f"{parameter_name} configurado correctamente"
+        }
+        
+        logger.info(f"✅ POST /parameter exitoso: {parameter_name} = {value} → {validated_value}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error inesperado en POST /parameter: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
 @router.get("/{parameter_name}")
 async def get_parameter_info(parameter_name: str):
     """Obtener información sobre un parámetro específico"""
@@ -559,17 +634,19 @@ async def save_configurations(config_data: ConfigurationData):
 
 # ============= RUTAS ESPECÍFICAS (antes de las dinámicas) =============
 @router.post("/custom/configurations/validate", response_model=ConfigurationValidationResponse)
-async def validate_configuration(request: ConfigurationRequest):
+async def validate_configuration(configuration: CustomConfiguration):
     """
     Validar una configuración
     
     Valida que una configuración tenga todos los parámetros
     requeridos y valores válidos antes de guardarla.
+    
+    Request body debe contener directamente los parámetros de configuración.
     """
     try:
         logger.info("🔍 Validando configuración...")
         
-        result = await custom_config_manager.validate_configuration(request.configuration.dict())
+        result = await custom_config_manager.validate_configuration(configuration.dict())
         
         logger.info(f"✅ Validación completada: {'exitosa' if result.is_valid else 'falló'}")
         
@@ -579,31 +656,38 @@ async def validate_configuration(request: ConfigurationRequest):
         logger.error(f"❌ Error validando configuración: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.get("/custom/configurations/export", response_model=ConfigurationExportResponse)
+@router.get("/custom/configurations/export")
 async def export_configurations():
     """
     Exportar configuraciones a JSON
     
     Genera un archivo JSON con todas las configuraciones
     guardadas para portabilidad entre dispositivos.
+    
+    Respuesta compatible con documentación frontend.
     """
     try:
         logger.info("📤 Exportando configuraciones...")
         
-        content, count = await custom_config_manager.export_configurations()
+        # Obtener configuraciones del manager
+        configurations = await custom_config_manager.load_configurations()
         
-        # Generar nombre de archivo con timestamp
+        # Preparar respuesta según documentación frontend
         from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"configuraciones_backup_{timestamp}.json"
+        exported_at = datetime.now().isoformat()
         
-        logger.info(f"✅ Exportadas {count} configuraciones")
+        export_response = {
+            "export_info": {
+                "total_configurations": len(configurations),
+                "exported_at": exported_at,
+                "version": "1.0"
+            },
+            "configurations": configurations
+        }
         
-        return ConfigurationExportResponse(
-            filename=filename,
-            content=content,
-            configurations_count=count
-        )
+        logger.info(f"✅ Exportadas {len(configurations)} configuraciones")
+        
+        return export_response
         
     except Exception as e:
         logger.error(f"❌ Error exportando configuraciones: {e}")
@@ -789,7 +873,7 @@ async def delete_configuration(configuration_name: str):
         logger.error(f"❌ Error eliminando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.post("/custom/configurations/{configuration_name}/apply", response_model=ConfigurationResponse)
+@router.post("/custom/configurations/{configuration_name}/apply")
 async def apply_configuration(
     configuration_name: str, 
     esp32_manager: ESP32Manager = Depends(get_esp32_manager)
@@ -822,6 +906,7 @@ async def apply_configuration(
         # Aplicar cada parámetro de la configuración
         applied_params = []
         failed_params = []
+        esp32_responses = {}
         
         # Mapeo de parámetros del modelo a nombres ESP32
         param_mapping = {
@@ -850,32 +935,61 @@ async def apply_configuration(
                     
                     if result.get("success"):
                         applied_params.append(f"{esp32_param}={validated_value}")
+                        esp32_responses[esp32_param] = {
+                            "success": True,
+                            "esp32_response": result.get("response", "OK")
+                        }
                         logger.info(f"✅ Aplicado: {esp32_param} = {validated_value}")
                     else:
-                        failed_params.append(f"{esp32_param}: {result.get('error', 'Error desconocido')}")
-                        logger.error(f"❌ Error aplicando {esp32_param}: {result.get('error')}")
+                        error_msg = result.get('error', 'Error desconocido')
+                        failed_params.append(f"{esp32_param}: {error_msg}")
+                        esp32_responses[esp32_param] = {
+                            "success": False,
+                            "esp32_response": result.get("response", "ERROR"),
+                            "error": error_msg
+                        }
+                        logger.error(f"❌ Error aplicando {esp32_param}: {error_msg}")
                         
                 except Exception as param_error:
-                    failed_params.append(f"{esp32_param}: {str(param_error)}")
+                    error_msg = str(param_error)
+                    failed_params.append(f"{esp32_param}: {error_msg}")
+                    esp32_responses[esp32_param] = {
+                        "success": False,
+                        "error": error_msg
+                    }
                     logger.error(f"❌ Error con parámetro {esp32_param}: {param_error}")
         
-        # Preparar respuesta
+        # Preparar respuesta compatible con documentación frontend
+        from datetime import datetime
+        applied_at = datetime.now().isoformat()
+        
         if failed_params:
-            message = f"Configuración '{configuration_name}' aplicada parcialmente. " \
-                     f"Aplicados: {len(applied_params)}, Fallos: {len(failed_params)}"
+            message = f"Configuración '{configuration_name}' aplicada parcialmente al ESP32"
             status = "partial_success"
         else:
-            message = f"Configuración '{configuration_name}' aplicada completamente. " \
-                     f"Parámetros aplicados: {len(applied_params)}"
+            message = f"Configuración '{configuration_name}' aplicada exitosamente al ESP32"
             status = "success"
         
         logger.info(f"🔧 Aplicación completada: {message}")
         
-        return ConfigurationResponse(
-            message=message,
-            status=status,
-            configuration_name=configuration_name
-        )
+        response = {
+            "message": message,
+            "status": status,
+            "configuration_name": configuration_name,
+            "esp32_responses": esp32_responses,
+            "applied_at": applied_at
+        }
+        
+        # Agregar resumen si hay fallos
+        if failed_params:
+            response["summary"] = {
+                "total_parameters": len(param_mapping),
+                "applied_successfully": len(applied_params),
+                "failed": len(failed_params),
+                "failed_parameters": failed_params
+            }
+        
+        return response
         
     except HTTPException:
         raise

@@ -16,7 +16,8 @@ const ESP32Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('http://localhost:8000/data');
+        // IMPORTANTE: usar /data/ con barra final
+        const response = await fetch('http://localhost:8000/data/');
         if (response.ok) {
           const esp32Data = await response.json();
           setData(esp32Data);
@@ -49,19 +50,21 @@ const ESP32Dashboard = () => {
       <div className="data-grid">
         <div className="data-card">
           <h3>🔋 Batería</h3>
-          <p>{data.batteryVoltage}V ({data.batteryPercentage}%)</p>
+          <p>{data.voltageBatterySensor2}V ({data.estimatedSOC}%)</p>
           <p>Capacidad: {data.batteryCapacity}Ah</p>
         </div>
         
         <div className="data-card">
           <h3>⚡ Carga</h3>
-          <p>Estado: {data.isCharging ? '🟢 Cargando' : '🔴 No carga'}</p>
-          <p>Corriente: {data.chargingCurrent}A</p>
+          <p>Estado: {data.chargeState}</p>
+          <p>Panel→Batería: {data.panelToBatteryCurrent}mA</p>
+          <p>Batería→Carga: {data.batteryToLoadCurrent}mA</p>
         </div>
         
         <div className="data-card">
           <h3>🌡️ Temperatura</h3>
-          <p>{data.temperatureC}°C / {data.temperatureF}°F</p>
+          <p>{data.temperature}°C</p>
+          <p>PWM: {data.currentPWM}/255</p>
         </div>
         
         <div className="data-card">
@@ -368,7 +371,8 @@ const useESP32Data = (pollingInterval = 3000) => {
 
   const fetchData = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:8000/data');
+      // IMPORTANTE: usar /data/ con barra final
+      const response = await fetch('http://localhost:8000/data/');
       
       if (response.ok) {
         const esp32Data = await response.json();
@@ -436,7 +440,7 @@ const MyComponent = () => {
 
   return (
     <div>
-      <h3>Voltaje: {data.batteryVoltage}V</h3>
+      <h3>Voltaje: {data.voltageBatterySensor2}V</h3>
       <button onClick={() => updateParameter('useFuenteDC', !data.useFuenteDC)}>
         {data.useFuenteDC ? 'Desactivar' : 'Activar'} Fuente DC
       </button>
@@ -468,20 +472,21 @@ const NotificationSystem = () => {
   useEffect(() => {
     if (data) {
       // Alertas por voltaje bajo
-      if (data.batteryVoltage < 11.5) {
-        addNotification('warning', `⚠️ Voltaje bajo: ${data.batteryVoltage}V`);
+      if (data.voltageBatterySensor2 < 11.5) {
+        addNotification('warning', `⚠️ Voltaje bajo: ${data.voltageBatterySensor2}V`);
       }
       
       // Alertas por temperatura alta
-      if (data.temperatureC > 40) {
-        addNotification('error', `🌡️ Temperatura alta: ${data.temperatureC}°C`);
+      if (data.temperature > 40) {
+        addNotification('error', `🌡️ Temperatura alta: ${data.temperature}°C`);
       }
       
-      // Notificar cuando empiece/termine la carga
-      if (data.isCharging && !window.lastChargingState) {
-        addNotification('success', '🔋 Inicio de carga detectado');
+      // Notificar cambios en el estado de carga
+      const isCharging = data.chargeState !== 'ERROR' && data.chargeState !== 'FLOAT_CHARGE';
+      if (isCharging && !window.lastChargingState) {
+        addNotification('success', `🔋 Estado de carga: ${data.chargeState}`);
       }
-      window.lastChargingState = data.isCharging;
+      window.lastChargingState = isCharging;
     }
 
     // Alerta de desconexión
@@ -759,7 +764,8 @@ export function useESP32() {
 
   const fetchData = async () => {
     try {
-      const response = await fetch('http://localhost:8000/data')
+      // IMPORTANTE: usar /data/ con barra final
+      const response = await fetch('http://localhost:8000/data/')
       if (response.ok) {
         data.value = await response.json()
         connected.value = true
