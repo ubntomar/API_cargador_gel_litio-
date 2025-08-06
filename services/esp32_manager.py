@@ -28,6 +28,10 @@ class ESP32Manager:
         self._communication_errors = 0
         self._max_retries = 3
         
+        # ✅ NUEVOS: Atributos para get_connection_info
+        self.last_successful_communication = None
+        self.communication_errors = 0
+        
         # ✅ FRONTEND POLLING: Control especial para comandos concurrentes
         self._last_set_command_time = 0
         self._min_set_command_interval = 1.0  # Reducido a 1s para mejor responsividad
@@ -357,6 +361,10 @@ class ESP32Manager:
                     self._last_data_time = current_time
                     self._communication_errors = 0  # Reset counter on success
                     
+                    # ✅ NUEVO: Actualizar timestamp de comunicación exitosa
+                    self.last_successful_communication = current_time
+                    self.communication_errors = self._communication_errors
+                    
                     logger.info(f"✅ Datos ESP32 obtenidos exitosamente (cached por {self._cache_duration}s)")
                     return parsed_data
                 else:
@@ -369,6 +377,7 @@ class ESP32Manager:
                 
         except Exception as e:
             self._communication_errors += 1
+            self.communication_errors = self._communication_errors  # ✅ Sincronizar contador público
             logger.error(f"❌ Error obteniendo datos del ESP32 (error #{self._communication_errors}): {e}")
             
             # ✅ MEJORA: Retornar datos cached si hay errores de comunicación recientes
@@ -550,6 +559,98 @@ class ESP32Manager:
         finally:
             if lock_acquired:
                 self.lock.release()
+
+    def get_connection_info(self) -> Dict[str, Any]:
+        """Obtener información de conexión del ESP32"""
+        from core.config import settings
+        
+        return {
+            "connected": self.connected,
+            "port": settings.SERIAL_PORT,
+            "baudrate": settings.SERIAL_BAUDRATE,
+            "last_communication": self.last_successful_communication,
+            "communication_errors": self.communication_errors,
+            "queue_size": 0,
+            "has_cached_data": self._last_data is not None,
+            "cache_age_seconds": time.time() - self._last_data_time if self._last_data else 0,
+            "optimization": "chunks_enabled"
+        }
+
+    async def toggle_load(self, total_seconds: int) -> bool:
+        """
+        ✅ COMANDO ESP32: Apagar carga temporalmente
+        Basado en el protocolo TOGGLE_LOAD del ESP32
+        """
+        try:
+            logger.info(f"🔌 Enviando comando para apagar carga por {total_seconds} segundos")
+            
+            # Validar rango según el ESP32 (máximo 43200 segundos = 12 horas)
+            if total_seconds < 1 or total_seconds > 43200:
+                logger.error(f"❌ Tiempo fuera de rango: {total_seconds}s (permitido: 1-43200)")
+                return False
+            
+            command = f"CMD:TOGGLE_LOAD:{total_seconds}"
+            
+            # ✅ USAR MÉTODO DE TEXTO PLANO (como SET)
+            lock_acquired = self.lock.acquire(timeout=3.0)
+            
+            if not lock_acquired:
+                logger.error("❌ Timeout obteniendo lock para toggle_load")
+                return False
+            
+            try:
+                response = await self._send_command_and_read_text(command, timeout=6.0)
+                
+                if response and response.startswith("OK:"):
+                    logger.info(f"✅ Comando toggle_load enviado exitosamente: {response}")
+                    # ✅ Invalidar cache
+                    self._last_data = None
+                    return True
+                else:
+                    logger.error(f"❌ Error en toggle_load: {response}")
+                    return False
+                    
+            finally:
+                self.lock.release()
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción en toggle_load: {e}")
+            return False
+
+    async def cancel_temporary_off(self) -> bool:
+        """
+        ✅ COMANDO ESP32: Cancelar apagado temporal
+        Basado en el protocolo CANCEL_TEMP_OFF del ESP32
+        """
+        try:
+            logger.info("🔌 Enviando comando para cancelar apagado temporal")
+            
+            command = "CMD:CANCEL_TEMP_OFF"
+            
+            lock_acquired = self.lock.acquire(timeout=3.0)
+            
+            if not lock_acquired:
+                logger.error("❌ Timeout obteniendo lock para cancel_temporary_off")
+                return False
+            
+            try:
+                response = await self._send_command_and_read_text(command, timeout=4.0)
+                
+                if response and response.startswith("OK:"):
+                    logger.info(f"✅ Comando cancel_temporary_off enviado exitosamente: {response}")
+                    # ✅ Invalidar cache
+                    self._last_data = None
+                    return True
+                else:
+                    logger.error(f"❌ Error en cancel_temporary_off: {response}")
+                    return False
+                    
+            finally:
+                self.lock.release()
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción cancelando apagado: {e}")
+            return False
 
     async def stop(self) -> None:
         """Detener manager y cerrar conexión"""
