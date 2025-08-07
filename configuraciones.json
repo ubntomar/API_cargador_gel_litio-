@@ -26,5 +26,33 @@
     "factorDivider": 2,
     "createdAt": "2025-08-06T10:38:42",
     "updatedAt": "2025-08-06T10:38:42"
+  },
+  "trents": {
+    "batteryCapacity": 153.0,
+    "isLithium": false,
+    "thresholdPercentage": 3.0,
+    "maxAllowedCurrent": 15000.0,
+    "bulkVoltage": 14.6,
+    "absorptionVoltage": 14.6,
+    "floatVoltage": 13.8,
+    "useFuenteDC": true,
+    "fuenteDC_Amps": 0.0,
+    "factorDivider": 1,
+    "createdAt": "2025-08-07T14:49:43",
+    "updatedAt": "2025-08-07T14:49:43"
+  },
+  "Batería Litio 100Ah Casa": {
+    "batteryCapacity": 100.0,
+    "isLithium": true,
+    "thresholdPercentage": 5.0,
+    "maxAllowedCurrent": 10000.0,
+    "bulkVoltage": 14.4,
+    "absorptionVoltage": 14.4,
+    "floatVoltage": 13.6,
+    "useFuenteDC": false,
+    "fuenteDC_Amps": 0.0,
+    "factorDivider": 1,
+    "createdAt": "2025-08-07T15:09:19",
+    "updatedAt": "2025-08-07T15:09:19"
   }
 }
