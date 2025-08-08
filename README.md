@@ -812,6 +812,108 @@ curl -X PUT http://localhost:8000/config/bulkVoltage -H "Content-Type: applicati
 
 ---
 
+#### 🔧 **CRÍTICO: Error de Concurrencia en Configuraciones (Agosto 2025)**
+
+**PROBLEMA IDENTIFICADO:** `[Errno 16] Device or resource busy: 'configuraciones.tmp' -> 'configuraciones.json'`
+
+**CAUSA RAÍZ:** 
+- **Problema de concurrencia** en operaciones de escritura de archivos dentro del contenedor Docker
+- La API lee el archivo en cada request (`📋 Cargando configuraciones personalizadas...`)
+- Mientras está leyendo, otro request intenta escribir → conflicto de acceso
+- **Específico de Orange Pi R2S/RISC-V:** Sistema de archivos más estricto con locks
+
+**SÍNTOMAS:**
+```bash
+# Error en logs de la API
+2025-08-08 17:07:22,869 - esp32_api - ERROR - ❌ Error guardando configuración 'test': [Errno 16] Device or resource busy: 'configuraciones.tmp' -> 'configuraciones.json'
+
+# Frontend recibe error 500
+{"detail":"Error interno: Error al guardar configuración: [Errno 16] Device or resource busy: 'configuraciones.tmp' -> 'configuraciones.json'"}
+```
+
+**PATRÓN IDENTIFICADO EN LOGS:**
+```bash
+# 1. Usuario intenta guardar configuración
+INFO - 💾 Guardando configuración individual: test
+# 2. API carga archivo existente (LECTURA)
+INFO - 📋 Cargando configuraciones personalizadas...
+# 3. Intenta escribir pero archivo está ocupado (CONFLICTO)
+ERROR - ❌ Error guardando configuración 'test': [Errno 16] Device or resource busy
+```
+
+**DIAGNÓSTICO REALIZADO:**
+```bash
+# ✅ Archivo configuraciones.json NO está bloqueado por procesos externos
+lsof configuraciones.json  # → Sin resultados (archivo libre)
+
+# ✅ Sistema tiene espacio disponible
+df -h  # → 2.9G disponibles de 7.0G (58% uso)
+
+# ✅ Permisos correctos
+ls -la configuraciones.*  # → -rw-rw-r-- orangepi orangepi
+
+# ✅ Un solo proceso Python corriendo (dentro de Docker)
+ps aux | grep python  # → Solo dnsmasq ejecutando Python (contenedor)
+```
+
+**CAUSA ESPECÍFICA:**
+- **Threading dentro del contenedor**: FastAPI maneja múltiples requests concurrentemente
+- **Lectura + Escritura simultánea**: Operación `os.rename()` falla cuando el archivo destino está siendo leído
+- **Orange Pi R2S factor**: RISC-V tiene manejo de locks de archivos más estricto que x86
+
+**SOLUCIÓN RECOMENDADA (Para implementar):**
+```python
+# En custom_configuration_manager.py - Agregar lock de archivos
+import fcntl  # Para file locking en Linux
+import time   # Para reintentos
+
+def save_configurations_with_lock(self, configurations):
+    max_retries = 3
+    retry_delay = 0.1
+    
+    for attempt in range(max_retries):
+        try:
+            # Usar file lock para prevenir concurrencia
+            with open("configuraciones.json.lock", "w") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # Proceder con la escritura normal
+                return self._save_configurations_original(configurations)
+                
+        except BlockingIOError:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+            else:
+                raise Exception(f"No se pudo obtener lock después de {max_retries} intentos")
+```
+
+**WORKAROUND TEMPORAL:**
+```bash
+# Si el error persiste, reiniciar el contenedor para limpiar locks
+docker-compose restart esp32-api
+
+# O reconstruir completamente
+docker-compose down && docker-compose up -d
+```
+
+**VERIFICACIÓN DEL PROBLEMA:**
+```bash
+# Monitorear logs en tiempo real para ver el patrón
+docker-compose logs -f esp32-api | grep "configuración"
+
+# Verificar requests concurrentes desde frontend
+# Si varios usuarios guardan configuraciones al mismo tiempo → Error reproducible
+```
+
+**⚠️ IMPORTANTE:**
+- **No es problema del frontend** - El frontend envía requests HTTP válidos
+- **Es problema de backend** - Falta de sincronización en operaciones de archivo
+- **Específico de RISC-V** - En x86 este problema podría no manifestarse
+- **Solución requerida** - Implementar file locking o semáforos en el código backend
+
+---
+
 ### 🍊 Problemas Específicos Orange Pi R2S / RISC-V
 
 #### Puerto Serial no funciona

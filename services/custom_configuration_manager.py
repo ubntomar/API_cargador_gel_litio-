@@ -6,6 +6,9 @@ Servicio para gestión de configuraciones personalizadas
 import json
 import os
 import asyncio
+import fcntl  # File locking para resolver concurrencia en RISC-V
+import time
+import tempfile
 from typing import Dict, Optional, List, Tuple
 from datetime import datetime
 from pathlib import Path
@@ -18,7 +21,7 @@ from models.custom_configurations import (
 )
 
 class CustomConfigurationManager:
-    """Gestor de configuraciones personalizadas"""
+    """Gestor de configuraciones personalizadas con file locking para RISC-V"""
     
     def __init__(self, config_file_path: str = "configuraciones.json"):
         """
@@ -28,16 +31,144 @@ class CustomConfigurationManager:
             config_file_path: Ruta al archivo de configuraciones
         """
         self.config_file_path = Path(config_file_path)
-        self.lock = asyncio.Lock()
+        self.lock_file_path = Path(f"{config_file_path}.lock")
+        self.asyncio_lock = asyncio.Lock()
+        
+        # Configuración de reintentos para RISC-V
+        self.max_retries = 5
+        self.retry_delay = 0.1
+        self.lock_timeout = 30.0  # 30 segundos max para obtener lock
         
         # Asegurar que el directorio existe
         self.config_file_path.parent.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"📋 ConfigurationManager inicializado con archivo: {self.config_file_path}")
+        logger.info(f"🔒 File locking habilitado para RISC-V con lock: {self.lock_file_path}")
+    
+    async def _acquire_file_lock(self, timeout: float = None) -> int:
+        """
+        Obtener lock de archivo para prevenir concurrencia en RISC-V
+        
+        Args:
+            timeout: Tiempo máximo para esperar el lock
+            
+        Returns:
+            File descriptor del lock
+            
+        Raises:
+            Exception: Si no se puede obtener el lock
+        """
+        if timeout is None:
+            timeout = self.lock_timeout
+            
+        start_time = time.time()
+        
+        for attempt in range(self.max_retries):
+            try:
+                # Crear archivo de lock
+                lock_fd = os.open(self.lock_file_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+                
+                # Intentar obtener lock exclusivo no-bloqueante
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                
+                # Escribir PID en el archivo de lock para debugging
+                os.write(lock_fd, f"{os.getpid()}\n".encode())
+                os.fsync(lock_fd)
+                
+                logger.debug(f"🔒 File lock obtenido en intento {attempt + 1}")
+                return lock_fd
+                
+            except (OSError, IOError) as e:
+                # Si el error es "Resource temporarily unavailable" = lock ocupado
+                if e.errno == 11 or "Resource temporarily unavailable" in str(e):
+                    elapsed = time.time() - start_time
+                    if elapsed >= timeout:
+                        os.close(lock_fd)
+                        raise Exception(f"No se pudo obtener file lock después de {timeout}s")
+                    
+                    # Esperar antes del siguiente intento
+                    await asyncio.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                else:
+                    # Error diferente, cerrar y re-lanzar
+                    if 'lock_fd' in locals():
+                        os.close(lock_fd)
+                    raise Exception(f"Error obteniendo file lock: {e}")
+            
+        raise Exception(f"No se pudo obtener file lock después de {self.max_retries} intentos")
+    
+    def _release_file_lock(self, lock_fd: int) -> None:
+        """
+        Liberar lock de archivo
+        
+        Args:
+            lock_fd: File descriptor del lock a liberar
+        """
+        try:
+            if lock_fd is not None:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                os.close(lock_fd)
+                
+                # Remover archivo de lock
+                if self.lock_file_path.exists():
+                    self.lock_file_path.unlink()
+                
+                logger.debug("🔓 File lock liberado")
+        except Exception as e:
+            logger.warning(f"⚠️ Error liberando file lock: {e}")
+    
+    async def _save_to_file_with_lock(self, configurations: Dict[str, Dict]) -> None:
+        """
+        Método para guardar configuraciones con file locking robusto para RISC-V
+        
+        Args:
+            configurations: Configuraciones a guardar
+            
+        Raises:
+            Exception: Si hay error al guardar
+        """
+        lock_fd = None
+        temp_file_path = None
+        
+        try:
+            # 1. Obtener file lock del sistema operativo
+            lock_fd = await self._acquire_file_lock()
+            
+            # 2. Crear archivo temporal en el mismo directorio (para rename atómico)
+            temp_file_path = self.config_file_path.with_suffix(f'.tmp.{os.getpid()}')
+            
+            # 3. Escribir datos al archivo temporal
+            with open(temp_file_path, 'w', encoding='utf-8') as f:
+                json.dump(configurations, f, indent=2, ensure_ascii=False)
+                f.flush()  # Forzar escritura al disco
+                os.fsync(f.fileno())  # Sincronizar con sistema de archivos
+            
+            # 4. Mover archivo temporal al destino final (operación atómica)
+            temp_file_path.replace(self.config_file_path)
+            temp_file_path = None  # Marcar como movido exitosamente
+            
+            logger.debug(f"✅ Configuraciones guardadas con file lock (PID: {os.getpid()})")
+            
+        except Exception as e:
+            error_msg = f"Error guardando con file lock: {e}"
+            logger.error(f"❌ {error_msg}")
+            raise Exception(error_msg)
+            
+        finally:
+            # Limpiar archivo temporal si existe
+            if temp_file_path and temp_file_path.exists():
+                try:
+                    temp_file_path.unlink()
+                except Exception as cleanup_error:
+                    logger.warning(f"⚠️ Error limpiando archivo temporal: {cleanup_error}")
+            
+            # Liberar file lock
+            if lock_fd is not None:
+                self._release_file_lock(lock_fd)
     
     async def save_configurations(self, configurations_data: str) -> Dict[str, str]:
         """
-        Guardar configuraciones desde string JSON
+        Guardar configuraciones desde string JSON con file locking
         
         Args:
             configurations_data: String JSON con las configuraciones
@@ -49,7 +180,7 @@ class CustomConfigurationManager:
             ValueError: Si el JSON es inválido
             Exception: Si hay error al guardar
         """
-        async with self.lock:
+        async with self.asyncio_lock:
             try:
                 # Validar que sea JSON válido
                 configurations = json.loads(configurations_data)
@@ -76,9 +207,8 @@ class CustomConfigurationManager:
                     except Exception as e:
                         raise ValueError(f"Error en configuración '{name}': {str(e)}")
                 
-                # Guardar en archivo
-                with open(self.config_file_path, 'w', encoding='utf-8') as f:
-                    json.dump(validated_configs, f, indent=2, ensure_ascii=False)
+                # Guardar en archivo con file locking
+                await self._save_to_file_with_lock(validated_configs)
                 
                 logger.info(f"✅ Guardadas {len(validated_configs)} configuraciones en {self.config_file_path}")
                 
@@ -96,18 +226,21 @@ class CustomConfigurationManager:
     
     async def load_configurations(self) -> Dict[str, Dict]:
         """
-        Cargar configuraciones desde archivo
+        Cargar configuraciones desde archivo con file locking
         
         Returns:
             Dict con las configuraciones cargadas
         """
-        async with self.lock:
+        # Usar asyncio lock para coordinación entre corrutinas
+        async with self.asyncio_lock:
             return await self._load_configurations_internal()
     
     async def _load_configurations_internal(self) -> Dict[str, Dict]:
         """
-        Método interno para cargar configuraciones sin lock (evita deadlocks)
+        Método interno para cargar configuraciones con file locking robusto
         """
+        lock_fd = None
+        
         try:
             logger.info("📋 Cargando configuraciones personalizadas...")
             
@@ -115,6 +248,18 @@ class CustomConfigurationManager:
                 logger.info("📋 Archivo de configuraciones no existe, devolviendo vacío")
                 return {}
             
+            # Obtener shared lock para lectura (permite múltiples lectores)
+            try:
+                lock_fd = os.open(self.lock_file_path, os.O_CREAT | os.O_RDONLY)
+                fcntl.flock(lock_fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except (OSError, IOError):
+                # Si no se puede obtener shared lock, intentar sin lock (degraded mode)
+                logger.warning("⚠️ No se pudo obtener shared lock, leyendo sin lock")
+                if lock_fd:
+                    os.close(lock_fd)
+                    lock_fd = None
+            
+            # Leer archivo de configuraciones
             with open(self.config_file_path, 'r', encoding='utf-8') as f:
                 configurations = json.load(f)
             
@@ -123,12 +268,20 @@ class CustomConfigurationManager:
             
         except json.JSONDecodeError as e:
             logger.error(f"❌ Error decodificando JSON: {e}")
-            # ✅ CORRECCIÓN: Crear archivo limpio en caso de corrupción
+            # Crear archivo limpio en caso de corrupción
             await self._create_empty_config_file()
             return {}
         except Exception as e:
             logger.error(f"❌ Error cargando configuraciones: {e}")
             return {}
+        finally:
+            # Liberar lock de lectura
+            if lock_fd is not None:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                    os.close(lock_fd)
+                except Exception:
+                    pass
     
     async def _save_to_file(self, configurations: Dict[str, Dict]) -> None:
         """
@@ -163,7 +316,7 @@ class CustomConfigurationManager:
     
     async def save_single_configuration(self, name: str, configuration: CustomConfiguration) -> Dict[str, str]:
         """
-        Guardar una configuración individual
+        Guardar una configuración individual con file locking para RISC-V
         
         Args:
             name: Nombre de la configuración
@@ -172,94 +325,80 @@ class CustomConfigurationManager:
         Returns:
             Dict con mensaje y status
         """
+        logger.info(f"💾 Guardando configuración individual: {name}")
+        
         try:
-            # ✅ CORRECCIÓN: Usar asyncio.wait_for en lugar de asyncio.timeout para compatibilidad
-            async def _save_task():
-                async with self.lock:
-                    # Cargar configuraciones existentes sin deadlock
-                    existing_configs = await self._load_configurations_internal()
+            # Usar tanto asyncio lock como file lock para máxima seguridad
+            async with self.asyncio_lock:
+                # Cargar configuraciones existentes
+                existing_configs = await self._load_configurations_internal()
+                
+                # Convertir CustomConfiguration a dict
+                config_dict = configuration.dict()
+                current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+                
+                if name in existing_configs:
+                    # Mantener fecha de creación original
+                    config_dict['createdAt'] = existing_configs[name].get('createdAt', current_time)
+                else:
+                    config_dict['createdAt'] = current_time
+                
+                config_dict['updatedAt'] = current_time
+                
+                # Agregar la nueva configuración
+                existing_configs[name] = config_dict
+                
+                # Guardar con file locking robusto
+                await self._save_to_file_with_lock(existing_configs)
+                
+                logger.info(f"✅ Configuración '{name}' guardada correctamente")
+                
+                return {
+                    "message": f"Configuración '{name}' guardada exitosamente",
+                    "status": "success"
+                }
                     
-                    # ✅ CORRECCIÓN: Convertir CustomConfiguration a dict aquí
-                    config_dict = configuration.dict()
-                    current_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-                    
-                    if name in existing_configs:
-                        # Mantener fecha de creación original
-                        config_dict['createdAt'] = existing_configs[name].get('createdAt', current_time)
-                    else:
-                        config_dict['createdAt'] = current_time
-                    
-                    config_dict['updatedAt'] = current_time
-                    
-                    # Agregar la nueva configuración
-                    existing_configs[name] = config_dict
-                    
-                    # Guardar todo con manejo de errores mejorado
-                    await self._save_to_file(existing_configs)
-                    
-                    logger.info(f"✅ Configuración '{name}' guardada correctamente")
-                    
-                    return {
-                        "message": f"Configuración '{name}' guardada exitosamente",
-                        "status": "success"
-                    }
-            
-            return await asyncio.wait_for(_save_task(), timeout=10.0)
-                    
-        except asyncio.TimeoutError:
-            error_msg = f"Timeout guardando configuración '{name}' - deadlock detectado"
-            logger.error(f"❌ {error_msg}")
-            raise Exception(error_msg)
         except Exception as e:
             logger.error(f"❌ Error guardando configuración '{name}': {e}")
             raise Exception(f"Error al guardar configuración: {str(e)}")
     
     async def delete_configuration(self, name: str) -> Dict[str, str]:
         """
-        Eliminar una configuración específica
+        Eliminar configuración personalizada con file locking
         
         Args:
             name: Nombre de la configuración a eliminar
             
         Returns:
             Dict con mensaje y status
-        """
-        try:
-            # ✅ CORRECCIÓN: Usar asyncio.wait_for para evitar deadlocks
-            async def _delete_task():
-                async with self.lock:
-                    # ✅ CORRECCIÓN: Usar método interno sin lock para evitar deadlock
-                    configurations = await self._load_configurations_internal()
-                    
-                    if name not in configurations:
-                        raise ValueError(f"La configuración '{name}' no existe")
-                    
-                    # Eliminar la configuración
-                    del configurations[name]
-                    
-                    # ✅ CORRECCIÓN: Usar método seguro para guardar
-                    await self._save_to_file(configurations)
-                    
-                    logger.info(f"✅ Configuración '{name}' eliminada correctamente")
-                    
-                    return {
-                        "message": f"Configuración '{name}' eliminada exitosamente",
-                        "status": "success"
-                    }
             
-            return await asyncio.wait_for(_delete_task(), timeout=10.0)
+        Raises:
+            ValueError: Si la configuración no existe
+        """
+        async with self.asyncio_lock:
+            try:
+                # Cargar configuraciones actuales
+                configurations = await self.load_configurations()
                 
-        except asyncio.TimeoutError:
-            error_msg = f"Timeout eliminando configuración '{name}' - deadlock detectado"
-            logger.error(f"❌ {error_msg}")
-            raise Exception(error_msg)
-        except ValueError as ve:
-            # Error de configuración no encontrada
-            logger.error(f"❌ {str(ve)}")
-            raise Exception(str(ve))
-        except Exception as e:
-            logger.error(f"❌ Error eliminando configuración '{name}': {e}")
-            raise Exception(f"Error al eliminar configuración: {str(e)}")
+                if name not in configurations:
+                    raise ValueError(f"Configuración '{name}' no encontrada")
+                
+                # Eliminar configuración
+                del configurations[name]
+                
+                # Guardar las configuraciones actualizadas con file locking
+                await self._save_to_file_with_lock(configurations)
+                
+                logger.info(f"🗑️ Configuración '{name}' eliminada exitosamente")
+                
+                return {
+                    "message": f"Configuración '{name}' eliminada exitosamente",
+                    "status": "success"
+                }
+                
+            except Exception as e:
+                logger.error(f"❌ Error eliminando configuración '{name}': {e}")
+                raise Exception(f"Error al eliminar configuración: {str(e)}")
     
     async def get_configuration(self, name: str) -> Optional[Dict]:
         """
@@ -280,7 +419,7 @@ class CustomConfigurationManager:
         overwrite_existing: bool = False
     ) -> ConfigurationImportResponse:
         """
-        Importar configuraciones desde datos JSON
+        Importar configuraciones desde datos JSON con file locking
         
         Args:
             configurations_data: String JSON con configuraciones
@@ -289,7 +428,7 @@ class CustomConfigurationManager:
         Returns:
             ConfigurationImportResponse con resultado de la importación
         """
-        async with self.lock:
+        async with self.asyncio_lock:
             try:
                 # Validar JSON
                 import_configs = json.loads(configurations_data)
@@ -334,10 +473,9 @@ class CustomConfigurationManager:
                     except Exception as e:
                         errors[name] = str(e)
                 
-                # Guardar configuraciones actualizadas
+                # Guardar configuraciones actualizadas con file locking
                 if imported_count > 0:
-                    with open(self.config_file_path, 'w', encoding='utf-8') as f:
-                        json.dump(existing_configs, f, indent=2, ensure_ascii=False)
+                    await self._save_to_file_with_lock(existing_configs)
                 
                 logger.info(f"📋 Importación completada: {imported_count} importadas, {skipped_count} omitidas")
                 
