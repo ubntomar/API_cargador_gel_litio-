@@ -168,10 +168,10 @@ configure_project() {
         sed -i "s|/dev/ttyACM[0-9]*|${ESP32_PORT}|g" docker-compose.yml
         sed -i "s|/dev/ttyS[0-9]*|${ESP32_PORT}|g" docker-compose.yml
         
-        # También reemplazar en formato de device mapping
-        sed -i "s|\"/dev/ttyUSB[0-9]*:/dev/ttyUSB[0-9]*\"|\"/dev/ttyUSB0:${ESP32_PORT}\"|g" docker-compose.yml
-        sed -i "s|\"/dev/ttyACM[0-9]*:/dev/ttyACM[0-9]*\"|\"/dev/ttyACM0:${ESP32_PORT}\"|g" docker-compose.yml
-        sed -i "s|\"/dev/ttyS[0-9]*:/dev/ttyS[0-9]*\"|\"/dev/ttyS5:${ESP32_PORT}\"|g" docker-compose.yml
+        # Reemplazar device mappings específicos (sin regex complejos)
+        sed -i "s|/dev/ttyUSB0:/dev/ttyUSB0|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
+        sed -i "s|/dev/ttyACM0:/dev/ttyACM0|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
+        sed -i "s|/dev/ttyS5:/dev/ttyS5|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
         
         # Reemplazar SERIAL_PORT en variables de ambiente
         sed -i "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
