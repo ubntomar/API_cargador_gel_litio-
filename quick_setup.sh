@@ -157,24 +157,52 @@ configure_project() {
         # Backup
         cp docker-compose.yml docker-compose.yml.backup
         
-        # Reemplazar puerto en devices y environment
-        sed -i "s|/dev/tty[^:]*:/dev/tty[^\"]*|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
-        sed -i "s|SERIAL_PORT=/dev/tty[^\"]*|SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
+        # Reemplazar puerto en devices (línea con formato "- "/dev/ttyXXX:/dev/ttyXXX")
+        if sed -i "s#\"/dev/tty[^\"]*:/dev/tty[^\"]*\"#\"${ESP32_PORT}:${ESP32_PORT}\"#g" docker-compose.yml; then
+            print_success "✅ Dispositivos actualizados en docker-compose.yml"
+        else
+            print_warning "⚠️ No se pudo actualizar dispositivos en docker-compose.yml"
+        fi
         
-        print_success "✅ docker-compose.yml actualizado"
+        # Reemplazar puerto en environment (línea con formato SERIAL_PORT=/dev/ttyXXX)
+        if sed -i "s#SERIAL_PORT=/dev/tty[^[:space:]]*#SERIAL_PORT=${ESP32_PORT}#g" docker-compose.yml; then
+            print_success "✅ Variables de entorno actualizadas en docker-compose.yml"
+        else
+            print_warning "⚠️ No se pudo actualizar variables de entorno en docker-compose.yml"
+        fi
+        
+        # Verificar que los cambios se aplicaron
+        if grep -q "${ESP32_PORT}" docker-compose.yml; then
+            print_success "✅ docker-compose.yml configurado correctamente con ${ESP32_PORT}"
+        else
+            print_warning "⚠️ docker-compose.yml puede no estar configurado correctamente"
+        fi
+    else
+        print_error "❌ No se encontró docker-compose.yml"
+        return 1
     fi
     
-    # Actualizar .env.docker
+    # Actualizar .env.docker (crear si no existe)
     if [ -f ".env.docker" ]; then
         cp .env.docker .env.docker.backup
-        sed -i "s|SERIAL_PORT=.*|SERIAL_PORT=${ESP32_PORT}|g" .env.docker
+        sed -i "s#SERIAL_PORT=.*#SERIAL_PORT=${ESP32_PORT}#g" .env.docker
         print_success "✅ .env.docker actualizado"
+    else
+        # Crear .env.docker desde docker-compose.yml environment
+        print_status "Creando .env.docker..."
+        echo "SERIAL_PORT=${ESP32_PORT}" > .env.docker
+        print_success "✅ .env.docker creado"
     fi
     
     # Crear archivo .env principal si no existe
     if [ ! -f ".env" ]; then
         print_status "Creando archivo .env..."
-        cp .env.docker .env
+        if [ -f ".env.docker" ]; then
+            cp .env.docker .env
+        else
+            echo "SERIAL_PORT=${ESP32_PORT}" > .env
+        fi
+        print_success "✅ .env creado"
     fi
 }
 
