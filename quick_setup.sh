@@ -160,33 +160,50 @@ configure_project() {
         # Método más específico: buscar líneas específicas y reemplazar
         print_status "Actualizando configuración de dispositivos..."
         
-        # Reemplazar línea completa de devices con formato exacto
-        sed -i "s|.*\"/dev/tty[^\"]*:/dev/tty[^\"]*\".*|      - \"${ESP32_PORT}:${ESP32_PORT}\"  # ← Puerto ESP32 configurado automáticamente|g" docker-compose.yml
+        # Reemplazar línea completa de devices con formato exacto (método más seguro)
+        sed -i "s|.*\"/dev/tty[^\"]*:/dev/tty[^\"]*\".*|      - \"${ESP32_PORT}:${ESP32_PORT}\"  # ← Puerto ESP32 configurado automáticamente|g" docker-compose.yml 2>/dev/null || {
+            # Método alternativo si falla el anterior
+            print_status "Aplicando método de configuración alternativo..."
+            sed -i "s|/dev/ttyUSB[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+            sed -i "s|/dev/ttyACM[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+            sed -i "s|/dev/ttyS[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+        }
         
         # Reemplazar SERIAL_PORT en variables de ambiente
-        sed -i "s|.*SERIAL_PORT=/dev/tty.*|      - SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
+        sed -i "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
         
         # Verificar que los cambios se aplicaron
         if grep -q "${ESP32_PORT}" docker-compose.yml; then
             print_success "✅ docker-compose.yml configurado correctamente con ${ESP32_PORT}"
         else
-            print_warning "⚠️ Aplicando configuración alternativa..."
+            print_warning "⚠️ Aplicando configuración alternativa más robusta..."
             
-            # Método alternativo: usar perl si está disponible
-            if command -v perl > /dev/null 2>&1; then
-                perl -pi -e "s|/dev/tty[A-Za-z0-9]+|${ESP32_PORT}|g" docker-compose.yml
-            else
-                # Método manual más simple
-                sed -i "s|/dev/ttyUSB0|${ESP32_PORT}|g" docker-compose.yml
-                sed -i "s|/dev/ttyACM0|${ESP32_PORT}|g" docker-compose.yml
-                sed -i "s|/dev/ttyS5|${ESP32_PORT}|g" docker-compose.yml
-            fi
+            # Método más simple y seguro para reemplazar puertos
+            cp docker-compose.yml.backup docker-compose.yml
             
+            # Reemplazar uno por uno para evitar problemas de regex
+            sed -i "s|/dev/ttyUSB0|${ESP32_PORT}|g" docker-compose.yml
+            sed -i "s|/dev/ttyUSB1|${ESP32_PORT}|g" docker-compose.yml  
+            sed -i "s|/dev/ttyACM0|${ESP32_PORT}|g" docker-compose.yml
+            sed -i "s|/dev/ttyACM1|${ESP32_PORT}|g" docker-compose.yml
+            sed -i "s|/dev/ttyS5|${ESP32_PORT}|g" docker-compose.yml
+            sed -i "s|/dev/ttyS0|${ESP32_PORT}|g" docker-compose.yml
+            
+            # Verificar nuevamente
             if grep -q "${ESP32_PORT}" docker-compose.yml; then
                 print_success "✅ Configuración aplicada con método alternativo"
             else
-                print_error "❌ No se pudo configurar el puerto en docker-compose.yml"
-                print_status "Configuración manual requerida. Edita docker-compose.yml y cambia el puerto a ${ESP32_PORT}"
+                print_error "❌ No se pudo configurar el puerto automáticamente"
+                print_status "Será necesario editar manualmente docker-compose.yml"
+                print_status "Cambia todas las referencias de puertos serial a: ${ESP32_PORT}"
+                echo ""
+                print_status "Puedes continuar y editar el archivo después, o cancelar con Ctrl+C"
+                read -p "¿Continuar de todos modos? (y/N): " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    print_error "Setup cancelado"
+                    exit 1
+                fi
             fi
         fi
     else
@@ -222,39 +239,72 @@ configure_project() {
 build_and_start() {
     print_header "🏗️ CONSTRUYENDO Y INICIANDO SERVICIOS"
     
+    # Detectar arquitectura
+    ARCH=$(uname -m)
+    print_status "Arquitectura detectada: $ARCH"
+    
     # Verificar que Docker esté funcionando
     if ! docker info > /dev/null 2>&1; then
         print_error "Docker no está funcionando. Ejecuta: sudo systemctl start docker"
         return 1
     fi
     
-    # Verificar si buildx está disponible
-    if docker buildx version > /dev/null 2>&1; then
-        print_status "Usando Docker buildx para construcción optimizada..."
+    # Estrategia de construcción según arquitectura
+    if [[ "$ARCH" == "riscv64" ]]; then
+        print_status "🔧 Configuración especial para RISC-V detectada"
+        print_status "Usando emulación x86_64 para máxima compatibilidad..."
         
-        # Verificar buildx
-        if ! docker buildx ls | grep -q "esp32-builder"; then
-            print_status "Configurando Docker buildx para emulación..."
-            docker buildx create --name esp32-builder --driver docker-container --use || true
-            docker buildx inspect --bootstrap || true
-        fi
-        
-        # Construir con buildx
-        print_status "Construyendo imagen Docker con buildx (esto puede tomar varios minutos)..."
-        docker buildx build --platform linux/amd64 --tag esp32-solar-api:latest --load .
-    else
-        print_status "Usando Docker build estándar..."
-        
-        # Construir imagen estándar
-        print_status "Construyendo imagen Docker (esto puede tomar varios minutos)..."
-        
-        if [ -f "scripts/build.sh" ]; then
-            chmod +x scripts/build.sh
-            ./scripts/build.sh
+        # Para RISC-V, usar buildx con emulación x86_64
+        if docker buildx version > /dev/null 2>&1; then
+            print_status "Configurando Docker buildx para emulación x86_64..."
+            
+            # Crear builder si no existe
+            if ! docker buildx ls | grep -q "esp32-builder"; then
+                print_status "Creando builder personalizado..."
+                docker buildx create --name esp32-builder --driver docker-container --use || true
+                docker buildx inspect --bootstrap || true
+            fi
+            
+            # Construir forzando plataforma x86_64
+            print_status "Construyendo imagen con emulación x86_64 (puede tardar más en RISC-V)..."
+            docker buildx build --platform linux/amd64 --tag esp32-solar-api:latest --load . || {
+                print_warning "Buildx falló, intentando método alternativo..."
+                docker build --tag esp32-solar-api:latest .
+            }
         else
-            # Build directo sin buildx
-            docker build -t esp32-solar-api:latest .
+            print_warning "Buildx no disponible, usando build estándar..."
+            docker build --tag esp32-solar-api:latest .
         fi
+        
+    elif [[ "$ARCH" == "x86_64" ]] || [[ "$ARCH" == "amd64" ]]; then
+        print_status "🚀 Arquitectura x86_64 detectada - construcción nativa"
+        docker build --tag esp32-solar-api:latest .
+        
+    elif [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
+        print_status "🍓 Arquitectura ARM64 detectada (Orange Pi/Raspberry Pi)"
+        
+        # Para ARM64, intentar buildx primero
+        if docker buildx version > /dev/null 2>&1; then
+            print_status "Usando buildx para mejor compatibilidad..."
+            
+            if ! docker buildx ls | grep -q "esp32-builder"; then
+                docker buildx create --name esp32-builder --driver docker-container --use || true
+                docker buildx inspect --bootstrap || true
+            fi
+            
+            # Construir para la plataforma nativa primero, x86_64 como fallback
+            docker buildx build --platform linux/arm64 --tag esp32-solar-api:latest --load . || {
+                print_warning "Build ARM64 falló, intentando emulación x86_64..."
+                docker buildx build --platform linux/amd64 --tag esp32-solar-api:latest --load .
+            }
+        else
+            docker build --tag esp32-solar-api:latest .
+        fi
+        
+    else
+        print_warning "⚠️ Arquitectura no reconocida: $ARCH"
+        print_status "Intentando construcción estándar..."
+        docker build --tag esp32-solar-api:latest .
     fi
     
     print_success "✅ Imagen construida"
@@ -317,8 +367,17 @@ verify_installation() {
 show_final_info() {
     print_header "🎉 SETUP COMPLETADO"
     
+    ARCH=$(uname -m)
     print_success "✅ ESP32 Solar Charger API está ejecutándose"
-    print_success "✅ Emulación x86_64 funcionando en RISC-V"
+    
+    if [[ "$ARCH" == "riscv64" ]]; then
+        print_success "✅ Emulación x86_64 funcionando correctamente en RISC-V"
+    elif [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
+        print_success "✅ Optimizado para ARM64 (Orange Pi/Raspberry Pi)"
+    else
+        print_success "✅ Ejecutándose en arquitectura $ARCH"
+    fi
+    
     print_success "✅ Puerto serial configurado: $ESP32_PORT"
     
     echo ""
@@ -326,35 +385,53 @@ show_final_info() {
     echo -e "${YELLOW}Ver logs:${NC}        docker-compose logs -f esp32-api"
     echo -e "${YELLOW}Reiniciar:${NC}       docker-compose restart esp32-api"
     echo -e "${YELLOW}Detener:${NC}         docker-compose down"
-    echo -e "${YELLOW}Monitor:${NC}         ./scripts/monitor.sh"
-    echo -e "${YELLOW}Cambiar puerto:${NC}  ./scripts/change_serial_port.sh /dev/ttyUSB0"
+    echo -e "${YELLOW}Estado:${NC}          docker-compose ps"
+    echo -e "${YELLOW}Configurar puerto:${NC} ./quick_setup.sh"
     
     echo ""
     echo -e "${CYAN}🌐 ACCESO REMOTO:${NC}"
     IP=$(hostname -I | awk '{print $1}')
     echo -e "${YELLOW}API:${NC}             http://$IP:8000"
     echo -e "${YELLOW}Documentación:${NC}   http://$IP:8000/docs"
-    echo -e "${YELLOW}Monitoreo:${NC}       http://$IP:9000"
+    echo -e "${YELLOW}Health Check:${NC}    http://$IP:8000/health"
     
     echo ""
     echo -e "${CYAN}📱 EJEMPLO DE USO:${NC}"
     echo -e "${YELLOW}curl http://$IP:8000/data/${NC}"
     echo -e "${YELLOW}curl http://$IP:8000/health${NC}"
+    echo -e "${YELLOW}curl http://$IP:8000/config${NC}"
     
     echo ""
+    if [[ "$ARCH" == "riscv64" ]]; then
+        print_warning "💡 TIP RISC-V: Si hay problemas de rendimiento, considera usar 'docker-compose down && docker-compose up -d' para reiniciar"
+    fi
     print_warning "💡 TIP: Guarda la IP $IP para acceso desde otros dispositivos"
 }
 
 # Función principal
 main() {
-    print_header "ESP32 API - SETUP RÁPIDO PARA ORANGE PI R2S"
+    print_header "ESP32 API - SETUP RÁPIDO MULTIPLATAFORMA"
     
     echo -e "${CYAN}Este script hará automáticamente:${NC}"
     echo -e "${CYAN}• Detectar el puerto del ESP32${NC}"
     echo -e "${CYAN}• Configurar archivos Docker${NC}"
-    echo -e "${CYAN}• Construir imagen con emulación x86_64${NC}"
+    echo -e "${CYAN}• Construir imagen optimizada para tu arquitectura${NC}"
     echo -e "${CYAN}• Iniciar todos los servicios${NC}"
     echo -e "${CYAN}• Verificar que todo funcione${NC}"
+    echo ""
+    
+    # Mostrar información de la plataforma
+    ARCH=$(uname -m)
+    OS_INFO=""
+    if [ -f "/etc/os-release" ]; then
+        OS_INFO=$(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')
+    fi
+    
+    echo -e "${CYAN}🖥️  Plataforma detectada:${NC}"
+    echo -e "${YELLOW}   Arquitectura: $ARCH${NC}"
+    if [ -n "$OS_INFO" ]; then
+        echo -e "${YELLOW}   Sistema: $OS_INFO${NC}"
+    fi
     echo ""
     
     # Verificar que estemos en el directorio correcto
