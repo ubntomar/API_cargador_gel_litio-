@@ -861,32 +861,43 @@ ps aux | grep python  # → Solo dnsmasq ejecutando Python (contenedor)
 - **Lectura + Escritura simultánea**: Operación `os.rename()` falla cuando el archivo destino está siendo leído
 - **Orange Pi R2S factor**: RISC-V tiene manejo de locks de archivos más estricto que x86
 
-**SOLUCIÓN RECOMENDADA (Para implementar):**
-```python
-# En custom_configuration_manager.py - Agregar lock de archivos
-import fcntl  # Para file locking en Linux
-import time   # Para reintentos
+**✅ SOLUCIÓN IMPLEMENTADA (Agosto 2025):**
 
-def save_configurations_with_lock(self, configurations):
-    max_retries = 3
-    retry_delay = 0.1
+**Archivo modificado:** `services/custom_configuration_manager.py`
+
+**Cambios implementados:**
+1. **File locking con fcntl**: Locks exclusivos/compartidos a nivel del sistema operativo
+2. **Operaciones atómicas**: Escritura en archivos temporales con rename atómico
+3. **Sistema de reintentos**: Hasta 3 intentos con delays incrementales
+4. **Híbrido asyncio + OS locks**: Combinación de AsyncLock + file locks para máxima compatibilidad RISC-V
+
+**Código implementado:**
+```python
+import fcntl, time, tempfile
+
+async def _acquire_file_lock(self, file_path: str, lock_type: int, timeout: float = 5.0):
+    """Adquirir file lock con timeout y reintentos para RISC-V"""
     
-    for attempt in range(max_retries):
-        try:
-            # Usar file lock para prevenir concurrencia
-            with open("configuraciones.json.lock", "w") as lock_file:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                
-                # Proceder con la escritura normal
-                return self._save_configurations_original(configurations)
-                
-        except BlockingIOError:
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-                continue
-            else:
-                raise Exception(f"No se pudo obtener lock después de {max_retries} intentos")
+async def _save_to_file_with_lock(self, configurations: Dict[str, Dict]):
+    """Guardar configuraciones con file locking robusto"""
+    # Usar fcntl.LOCK_EX para escritura exclusiva
+    # Operaciones atómicas con archivos temporales
+    # Sistema de reintentos automático
 ```
+
+**Métodos actualizados con file locking:**
+- ✅ `save_single_configuration()` - Lock exclusivo durante escritura
+- ✅ `save_configurations()` - Lock exclusivo durante escritura masiva
+- ✅ `delete_configuration()` - Lock exclusivo durante eliminación
+- ✅ `import_configurations()` - Lock exclusivo durante importación
+- ✅ `load_configurations()` - Lock compartido durante lectura
+
+**Características del fix:**
+- **Thread-safe**: Compatible con FastAPI async/await
+- **Process-safe**: Locks a nivel del sistema operativo
+- **RISC-V optimizado**: Diseñado específicamente para Orange Pi R2S
+- **Fault-tolerant**: Sistema de reintentos y cleanup automático
+- **Atomic operations**: Previene corrupción de archivos durante interrupciones
 
 **WORKAROUND TEMPORAL:**
 ```bash
