@@ -62,6 +62,10 @@ pip install -r requirements.txt
 cp .env.example .env
 # Editar .env con tu configuración
 
+# ⚠️ IMPORTANTE: Crear carpeta logs con permisos correctos
+mkdir -p logs
+chmod 755 logs
+
 # Ejecutar servidor
 python main.py
 ```
@@ -122,6 +126,13 @@ devices:
   - "/dev/ttyUSB0:/dev/ttyUSB0"  # Ajustar según tu puerto
 
 # 🔧 Ajustar rutas en docker-compose.yml para RISC-V
+
+# ⚠️ IMPORTANTE: Configurar permisos de la carpeta logs
+# El contenedor Docker necesita permisos de escritura en la carpeta logs
+sudo mkdir -p logs
+sudo chmod 755 logs
+sudo chown $USER:$USER logs
+
 # Construir y ejecutar con Docker (desde directorio raíz)
 docker-compose up --build -d
 
@@ -148,6 +159,10 @@ export HOST=0.0.0.0
 export PORT=8000
 export DEBUG=false
 
+# ⚠️ IMPORTANTE: Crear carpeta logs con permisos correctos
+mkdir -p logs
+chmod 755 logs
+
 # Ejecutar servidor
 python main.py
 ```
@@ -172,6 +187,11 @@ mem_limit: 1512m               # Ajustar según RAM disponible
 ```bash
 # Hacer ejecutables los scripts incluidos
 chmod +x *.sh
+
+# ⚠️ IMPORTANTE: Configurar permisos de logs ANTES de ejecutar scripts
+mkdir -p logs
+chmod 755 logs
+chown $USER:$USER logs
 
 # Instalación automatizada Orange Pi
 sudo ./install_orangepi.sh
@@ -233,12 +253,20 @@ curl http://localhost:8000/health
 # Verificar conexión ESP32
 curl http://localhost:8000/data/
 
+# ⚠️ IMPORTANTE: Verificar permisos de carpeta logs
+ls -la logs/
+# Debe mostrar permisos como: drwxr-xr-x usuario usuario
+
 # Ver logs en tiempo real (desde directorio raíz)
 docker-compose logs -f esp32-api
 
 # O si es instalación nativa:
 cd ..
 tail -f logs/esp32_api.log
+
+# Si hay errores de permisos en logs:
+sudo chmod 755 logs
+sudo chown $USER:$USER logs
 ```
 
 #### 8. Actualización del Código (Git Pull)
@@ -661,6 +689,75 @@ curl http://localhost:8000/health
 tail -f logs/esp32_api.log
 ```
 
+#### 🔧 **CRÍTICO: ImportError en RISC-V (Agosto 2025)**
+
+**PROBLEMA IDENTIFICADO:** `ImportError: cannot import name 'ESP32Status' from 'models.esp32_data'`
+
+**CAUSA RAÍZ:** 
+- Contenedor Docker usa imagen en caché con código desactualizado
+- En RISC-V, las imágenes en caché pueden persistir después de `git pull`
+- La clase `ESP32Status` fue removida pero el contenedor mantiene la versión antigua
+
+**SÍNTOMAS:**
+```bash
+# Error al iniciar contenedor
+esp32-solar-charger-api | ImportError: cannot import name 'ESP32Status' from 'models.esp32_data'
+esp32-solar-charger-api | File "/app/models/__init__.py", line 7, in <module>
+```
+
+**SOLUCIÓN COMPLETA PARA RISC-V:**
+```bash
+# 1. DETENER contenedores completamente
+docker-compose down
+
+# 2. LIMPIAR caché Docker (CRÍTICO en RISC-V)
+docker system prune -f
+docker builder prune -f
+
+# 3. ELIMINAR imágenes específicas del proyecto
+docker images | grep esp32 | awk '{print $3}' | xargs docker rmi -f 2>/dev/null || true
+docker images | grep api_cargador | awk '{print $3}' | xargs docker rmi -f 2>/dev/null || true
+
+# 4. RECONSTRUIR desde cero (--no-cache OBLIGATORIO)
+docker-compose build --no-cache --pull
+
+# 5. LEVANTAR servicios
+docker-compose up -d
+
+# 6. VERIFICAR que no hay errores
+docker-compose logs esp32-api | head -20
+```
+
+**COMANDO ÚNICO PARA RISC-V:**
+```bash
+# Solución rápida todo-en-uno
+docker-compose down && \
+docker system prune -f && \
+docker builder prune -f && \
+docker images | grep -E "(esp32|api_cargador)" | awk '{print $3}' | xargs docker rmi -f 2>/dev/null || true && \
+docker-compose build --no-cache --pull && \
+docker-compose up -d
+```
+
+**VERIFICACIÓN DEL FIX:**
+```bash
+# ✅ Debe mostrar API iniciando correctamente
+docker-compose logs esp32-api | grep -E "(Iniciando|✅|🚀)"
+# Respuesta esperada: "🚀 Iniciando ESP32 Solar Charger API"
+
+# ✅ Verificar que no hay ImportError
+docker-compose logs esp32-api | grep -i "importerror"
+# No debe mostrar ningún resultado
+```
+
+**⚠️ IMPORTANTE PARA RISC-V:**
+1. **SIEMPRE usar `--no-cache`** al hacer rebuild en RISC-V
+2. **Limpiar caché Docker** antes de reconstruir después de git pull
+3. **No confiar en `docker-compose build`** sin `--no-cache` en RISC-V
+4. **Verificar logs** siempre después de reconstruir
+
+---
+
 #### 🔧 **CRÍTICO: Protocolo de Comunicación ESP32 (Agosto 2025)**
 
 **PROBLEMA IDENTIFICADO:** Los comandos SET (POST/PUT) fallan con error 500 o "Respuesta inválida del ESP32: None"
@@ -746,6 +843,30 @@ docker info | grep Architecture
 
 # Reiniciar Docker si es necesario
 sudo systemctl restart docker
+```
+
+#### Errores de permisos en carpeta logs
+```bash
+# Error común: "Permission denied" al escribir logs
+# Verificar permisos actuales de la carpeta logs
+ls -la logs/
+
+# Solución: Configurar permisos correctos
+sudo mkdir -p logs
+sudo chmod 755 logs
+sudo chown $USER:$USER logs
+
+# Para instalación con Docker, también verificar:
+# que el usuario esté en el grupo docker
+groups $USER | grep docker
+sudo usermod -aG docker $USER
+
+# Reiniciar contenedores después de cambiar permisos
+docker-compose down
+docker-compose up -d
+
+# Verificar que se pueden escribir logs
+docker-compose logs esp32-api | tail -5
 ```
 
 #### Problemas de memoria/rendimiento
