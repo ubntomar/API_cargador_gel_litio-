@@ -157,25 +157,37 @@ configure_project() {
         # Backup
         cp docker-compose.yml docker-compose.yml.backup
         
-        # Reemplazar puerto en devices (línea con formato "- "/dev/ttyXXX:/dev/ttyXXX")
-        if sed -i "s#\"/dev/tty[^\"]*:/dev/tty[^\"]*\"#\"${ESP32_PORT}:${ESP32_PORT}\"#g" docker-compose.yml; then
-            print_success "✅ Dispositivos actualizados en docker-compose.yml"
-        else
-            print_warning "⚠️ No se pudo actualizar dispositivos en docker-compose.yml"
-        fi
+        # Método más específico: buscar líneas específicas y reemplazar
+        print_status "Actualizando configuración de dispositivos..."
         
-        # Reemplazar puerto en environment (línea con formato SERIAL_PORT=/dev/ttyXXX)
-        if sed -i "s#SERIAL_PORT=/dev/tty[^[:space:]]*#SERIAL_PORT=${ESP32_PORT}#g" docker-compose.yml; then
-            print_success "✅ Variables de entorno actualizadas en docker-compose.yml"
-        else
-            print_warning "⚠️ No se pudo actualizar variables de entorno en docker-compose.yml"
-        fi
+        # Reemplazar línea completa de devices con formato exacto
+        sed -i "s|.*\"/dev/tty[^\"]*:/dev/tty[^\"]*\".*|      - \"${ESP32_PORT}:${ESP32_PORT}\"  # ← Puerto ESP32 configurado automáticamente|g" docker-compose.yml
+        
+        # Reemplazar SERIAL_PORT en variables de ambiente
+        sed -i "s|.*SERIAL_PORT=/dev/tty.*|      - SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
         
         # Verificar que los cambios se aplicaron
         if grep -q "${ESP32_PORT}" docker-compose.yml; then
             print_success "✅ docker-compose.yml configurado correctamente con ${ESP32_PORT}"
         else
-            print_warning "⚠️ docker-compose.yml puede no estar configurado correctamente"
+            print_warning "⚠️ Aplicando configuración alternativa..."
+            
+            # Método alternativo: usar perl si está disponible
+            if command -v perl > /dev/null 2>&1; then
+                perl -pi -e "s|/dev/tty[A-Za-z0-9]+|${ESP32_PORT}|g" docker-compose.yml
+            else
+                # Método manual más simple
+                sed -i "s|/dev/ttyUSB0|${ESP32_PORT}|g" docker-compose.yml
+                sed -i "s|/dev/ttyACM0|${ESP32_PORT}|g" docker-compose.yml
+                sed -i "s|/dev/ttyS5|${ESP32_PORT}|g" docker-compose.yml
+            fi
+            
+            if grep -q "${ESP32_PORT}" docker-compose.yml; then
+                print_success "✅ Configuración aplicada con método alternativo"
+            else
+                print_error "❌ No se pudo configurar el puerto en docker-compose.yml"
+                print_status "Configuración manual requerida. Edita docker-compose.yml y cambia el puerto a ${ESP32_PORT}"
+            fi
         fi
     else
         print_error "❌ No se encontró docker-compose.yml"
@@ -216,22 +228,33 @@ build_and_start() {
         return 1
     fi
     
-    # Verificar buildx
-    if ! docker buildx ls | grep -q "esp32-builder"; then
-        print_status "Configurando Docker buildx para emulación..."
-        docker buildx create --name esp32-builder --driver docker-container --use || true
-        docker buildx inspect --bootstrap || true
-    fi
-    
-    # Construir imagen
-    print_status "Construyendo imagen Docker (esto puede tomar varios minutos)..."
-    
-    if [ -f "scripts/build.sh" ]; then
-        chmod +x scripts/build.sh
-        ./scripts/build.sh
+    # Verificar si buildx está disponible
+    if docker buildx version > /dev/null 2>&1; then
+        print_status "Usando Docker buildx para construcción optimizada..."
+        
+        # Verificar buildx
+        if ! docker buildx ls | grep -q "esp32-builder"; then
+            print_status "Configurando Docker buildx para emulación..."
+            docker buildx create --name esp32-builder --driver docker-container --use || true
+            docker buildx inspect --bootstrap || true
+        fi
+        
+        # Construir con buildx
+        print_status "Construyendo imagen Docker con buildx (esto puede tomar varios minutos)..."
+        docker buildx build --platform linux/amd64 --tag esp32-solar-api:latest --load .
     else
-        # Build directo
-        docker buildx build --platform linux/amd64 --tag esp32-solar-api:emulated-x86_64 --load .
+        print_status "Usando Docker build estándar..."
+        
+        # Construir imagen estándar
+        print_status "Construyendo imagen Docker (esto puede tomar varios minutos)..."
+        
+        if [ -f "scripts/build.sh" ]; then
+            chmod +x scripts/build.sh
+            ./scripts/build.sh
+        else
+            # Build directo sin buildx
+            docker build -t esp32-solar-api:latest .
+        fi
     fi
     
     print_success "✅ Imagen construida"
