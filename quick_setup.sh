@@ -160,14 +160,18 @@ configure_project() {
         # Método más específico: buscar líneas específicas y reemplazar
         print_status "Actualizando configuración de dispositivos..."
         
-        # Reemplazar línea completa de devices con formato exacto (método más seguro)
-        sed -i "s|.*\"/dev/tty[^\"]*:/dev/tty[^\"]*\".*|      - \"${ESP32_PORT}:${ESP32_PORT}\"  # ← Puerto ESP32 configurado automáticamente|g" docker-compose.yml 2>/dev/null || {
-            # Método alternativo si falla el anterior
-            print_status "Aplicando método de configuración alternativo..."
-            sed -i "s|/dev/ttyUSB[0-9]*|${ESP32_PORT}|g" docker-compose.yml
-            sed -i "s|/dev/ttyACM[0-9]*|${ESP32_PORT}|g" docker-compose.yml
-            sed -i "s|/dev/ttyS[0-9]*|${ESP32_PORT}|g" docker-compose.yml
-        }
+        # Método más seguro: reemplazar puertos específicos directamente
+        print_status "Aplicando configuración de puerto..."
+        
+        # Reemplazar puertos comunes uno por uno (método más seguro)
+        sed -i "s|/dev/ttyUSB[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+        sed -i "s|/dev/ttyACM[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+        sed -i "s|/dev/ttyS[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+        
+        # También reemplazar en formato de device mapping
+        sed -i "s|\"/dev/ttyUSB[0-9]*:/dev/ttyUSB[0-9]*\"|\"/dev/ttyUSB0:${ESP32_PORT}\"|g" docker-compose.yml
+        sed -i "s|\"/dev/ttyACM[0-9]*:/dev/ttyACM[0-9]*\"|\"/dev/ttyACM0:${ESP32_PORT}\"|g" docker-compose.yml
+        sed -i "s|\"/dev/ttyS[0-9]*:/dev/ttyS[0-9]*\"|\"/dev/ttyS5:${ESP32_PORT}\"|g" docker-compose.yml
         
         # Reemplazar SERIAL_PORT en variables de ambiente
         sed -i "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
