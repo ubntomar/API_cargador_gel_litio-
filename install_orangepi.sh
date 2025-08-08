@@ -437,25 +437,19 @@ EOF
 
 # Crear estructura del proyecto
 create_project_structure() {
-    print_section "Creando Estructura del Proyecto"
+    print_section "Configurando Estructura del Proyecto"
     
-    PROJECT_DIR="esp32_api_docker"
+    # NOTA: Ahora trabajamos directamente en el directorio raíz del proyecto
+    # No creamos carpeta esp32_api_docker/ separada
     
-    if [ -d "$PROJECT_DIR" ]; then
-        print_warning "⚠️ El directorio $PROJECT_DIR ya existe"
-        read -p "¿Sobrescribir? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf "$PROJECT_DIR"
-        else
-            print_error "Instalación cancelada"
-            exit 1
-        fi
+    print_status "Creando estructura de directorios necesarios..."
+    mkdir -p {scripts,config,logs,data,docs}
+    
+    # Verificar que estamos en el directorio correcto del proyecto
+    if [ ! -f "main.py" ]; then
+        print_error "Error: No se encontró main.py. Asegúrate de estar en el directorio raíz del proyecto API_cargador_gel_litio-"
+        exit 1
     fi
-    
-    print_status "Creando estructura de directorios..."
-    mkdir -p "$PROJECT_DIR"/{scripts,config,logs,data,docs}
-    cd "$PROJECT_DIR"
     
     # Crear .env.docker con configuración por defecto
     print_status "Creando archivo de configuración..."

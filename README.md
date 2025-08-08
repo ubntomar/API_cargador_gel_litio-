@@ -110,13 +110,8 @@ ls -la /dev/ttyUSB0
 git clone <tu-repo> API_cargador_gel_litio-
 cd API_cargador_gel_litio-
 
-# 🍊 IMPORTANTE: Para RISC-V crear carpeta específica Docker
-mkdir -p esp32_api_docker
-cp docker-compose.yml esp32_api_docker/
-cp Dockerfile esp32_api_docker/
-
-# Cambiar al directorio Docker específico
-cd esp32_api_docker
+# 🍊 ACTUALIZADO: Trabajar directamente desde el directorio raíz
+# Los archivos docker-compose.yml y Dockerfile ya están en el directorio correcto
 
 # Verificar y ajustar docker-compose.yml
 # Asegurarse de que el puerto serial sea correcto
@@ -127,12 +122,7 @@ devices:
   - "/dev/ttyUSB0:/dev/ttyUSB0"  # Ajustar según tu puerto
 
 # 🔧 Ajustar rutas en docker-compose.yml para RISC-V
-# Cambiar context de "." a ".." para apuntar al directorio raíz
-build:
-  context: ..
-  dockerfile: esp32_api_docker/Dockerfile
-
-# Construir y ejecutar con Docker
+# Construir y ejecutar con Docker (desde directorio raíz)
 docker-compose up --build -d
 
 # Verificar logs
@@ -243,11 +233,10 @@ curl http://localhost:8000/health
 # Verificar conexión ESP32
 curl http://localhost:8000/data/
 
-# Ver logs en tiempo real (desde directorio esp32_api_docker)
-cd esp32_api_docker
+# Ver logs en tiempo real (desde directorio raíz)
 docker-compose logs -f esp32-api
 
-# O si es instalación nativa (desde directorio raíz):
+# O si es instalación nativa:
 cd ..
 tail -f logs/esp32_api.log
 ```
@@ -264,23 +253,18 @@ tail -f logs/esp32_api.log
 cd /home/orangepi/API_cargador_gel_litio-
 git pull origin main
 
-# 2. Actualizar archivos Docker en carpeta específica
-cp docker-compose.yml esp32_api_docker/
-cp Dockerfile esp32_api_docker/
+# 2. Los archivos Docker ya están en el directorio correcto
 
-# 3. Cambiar a directorio Docker para RISC-V
-cd esp32_api_docker
-
-# 4. Detener contenedores actuales
+# 3. Detener contenedores actuales
 docker-compose down
 
-# 5. Reconstruir imagen con cambios
+# 4. Reconstruir imagen con cambios
 docker-compose build --no-cache
 
-# 6. Levantar contenedores actualizados
+# 5. Levantar contenedores actualizados
 docker-compose up -d
 
-# 7. Verificar que todo funciona
+# 6. Verificar que todo funciona
 docker-compose logs -f esp32-api
 ```
 
@@ -294,7 +278,6 @@ chmod +x quick_setup.sh
 
 # El script automáticamente:
 # - Hace git pull
-# - Copia archivos a esp32_api_docker/
 # - Detiene contenedores
 # - Reconstruye imágenes
 # - Levanta servicios actualizados
@@ -305,14 +288,13 @@ chmod +x quick_setup.sh
 ```bash
 # ANTES de actualizar, hacer backup de configuraciones
 cp configuraciones.json configuraciones.json.backup
-cp esp32_api_docker/docker-compose.yml esp32_api_docker/docker-compose.yml.backup
+cp docker-compose.yml docker-compose.yml.backup
 
 # Verificar que no hay cambios locales importantes
 git status
 git stash  # Si hay cambios locales que quieres conservar
 
-# SIEMPRE trabajar desde esp32_api_docker/ para comandos Docker
-cd esp32_api_docker
+# SIEMPRE trabajar desde el directorio raíz para comandos Docker
 docker-compose ps    # Verificar estado
 docker-compose logs  # Ver logs
 ```
@@ -325,8 +307,7 @@ curl http://localhost:8000/
 # Verificar que la configuración se mantuvo
 curl http://localhost:8000/config/custom/configurations
 
-# Verificar logs por errores (desde esp32_api_docker/)
-cd esp32_api_docker
+# Verificar logs por errores (desde directorio raíz)
 docker-compose logs esp32-api | grep -i error
 
 # Test completo de funcionalidad

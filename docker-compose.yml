@@ -2,8 +2,8 @@
 # ESP32 Solar Charger API - Docker Compose CORREGIDO para Orange Pi R2S
 # =============================================================================
 
-# Este archivo docker-compose.yml debe ser ubicado en ./API_cargador_gel_litio-/esp32_api_docker
-# cp docker-compose.yml ./API_cargador_gel_litio-/esp32_api_docker/docker-compose.yml
+# Este archivo docker-compose.yml debe estar ubicado en el directorio raíz del proyecto
+# Ejecutar desde: ./API_cargador_gel_litio-/
 
 
 version: '3.8'
