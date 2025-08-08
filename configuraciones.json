@@ -3,14 +3,14 @@
     "batteryCapacity": 20.0,
     "isLithium": false,
     "thresholdPercentage": 3.0,
-    "maxAllowedCurrent": 3000.0,
+    "maxAllowedCurrent": 2500.0,
     "bulkVoltage": 14.6,
     "absorptionVoltage": 14.6,
     "floatVoltage": 13.8,
     "useFuenteDC": true,
     "fuenteDC_Amps": 3.0,
-    "factorDivider": 2,
+    "factorDivider": 5,
     "createdAt": "2025-08-07T17:59:52",
-    "updatedAt": "2025-08-07T17:59:52"
+    "updatedAt": "2025-08-07T21:10:16"
   }
 }
