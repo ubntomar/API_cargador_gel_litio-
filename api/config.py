@@ -6,6 +6,7 @@ Endpoints para configuración del ESP32 - ERROR JSON CORREGIDO
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from typing import Dict, Any, Optional
+from datetime import datetime
 from models.esp32_data import ConfigParameter
 from services.esp32_manager import ESP32Manager
 from services.data_cache import data_cache
@@ -25,12 +26,12 @@ from models.custom_configurations import (
     ConfigurationImportResponse,
     CustomConfiguration
 )
-from services.custom_configuration_manager import CustomConfigurationManager
+from services.custom_configuration_manager_redis import CustomConfigurationManagerRedis
 
 router = APIRouter(prefix="/config", tags=["Configuration"])
 
-# NUEVO: Instancia global del gestor de configuraciones personalizadas
-custom_config_manager = CustomConfigurationManager()
+# NUEVO: Instancia global del gestor de configuraciones personalizadas con Redis
+custom_config_manager = CustomConfigurationManagerRedis()
 
 # ✅ CORREGIDO: Usar strings en lugar de tipos Python para evitar error de serialización JSON
 CONFIGURABLE_PARAMETERS = {
@@ -673,7 +674,6 @@ async def export_configurations():
         configurations = await custom_config_manager.load_configurations()
         
         # Preparar respuesta según documentación frontend
-        from datetime import datetime
         exported_at = datetime.now().isoformat()
         
         export_response = {
@@ -996,3 +996,74 @@ async def apply_configuration(
     except Exception as e:
         logger.error(f"❌ Error aplicando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🔄 ENDPOINT DE MIGRACIÓN - Transferir datos de archivo a Redis
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.post("/custom/configurations/migrate", response_model=Dict[str, Any])
+async def migrate_configurations_to_redis():
+    """
+    🔄 MIGRAR configuraciones desde archivo JSON a Redis
+    
+    Este endpoint migra todas las configuraciones existentes desde
+    configuraciones.json a Redis para mejorar la concurrencia y performance.
+    
+    **Beneficios de la migración:**
+    - ✅ Elimina problemas de concurrencia con archivos
+    - ⚡ Mejora significativa de performance 
+    - 🔒 Operaciones atómicas nativas
+    - 📊 Mejor debugging y monitoring
+    
+    **Proceso:**
+    1. Lee configuraciones.json existente
+    2. Transfiere cada configuración a Redis
+    3. Valida integridad de datos
+    4. Proporciona reporte detallado
+    
+    **Nota:** Este proceso es seguro y no elimina el archivo original.
+    """
+    try:
+        logger.info("🔄 Iniciando migración de configuraciones a Redis...")
+        
+        result = await custom_config_manager.migrate_from_file()
+        
+        if "error" in result:
+            logger.error(f"❌ Error en migración: {result['error']}")
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        logger.info(f"✅ Migración completada: {result.get('migrated_count', 0)} configuraciones")
+        
+        return {
+            "migration_status": "completed",
+            "timestamp": datetime.now().isoformat(),
+            **result
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error en migración: {e}")
+        raise HTTPException(status_code=500, detail=f"Error en migración: {str(e)}")
+
+@router.get("/custom/configurations/storage-info")
+async def get_storage_info():
+    """
+    📊 Obtener información sobre el sistema de almacenamiento actual
+    
+    Proporciona detalles sobre:
+    - Tipo de almacenamiento activo (Redis vs archivo)
+    - Estado de conexión Redis
+    - Estadísticas de performance
+    - Información de configuraciones
+    """
+    try:
+        system_info = await custom_config_manager.get_system_info()
+        
+        return {
+            "storage_info": system_info,
+            "timestamp": datetime.now().isoformat(),
+            "migration_available": not system_info.get("redis_available", False)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo info de storage: {e}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo información: {str(e)}")

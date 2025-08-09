@@ -45,6 +45,9 @@ services:
       - CACHE_TTL=2
       - TZ=America/Bogota
       
+      # ✅ REDIS CONFIGURATION
+      - REDIS_URL=redis://esp32-redis:6379
+      
       # ✅ OPTIMIZACIONES MULTI-THREAD (NO QEMU_CPU)
       - OMP_NUM_THREADS=4          # OpenMP threads
       - MALLOC_ARENA_MAX=4         # Malloc arenas
@@ -70,6 +73,10 @@ services:
     
     # Política de reinicio
     restart: unless-stopped
+    
+    # ✅ DEPENDENCIAS - Esperar a que Redis esté listo
+    depends_on:
+      - redis
     
     # Healthcheck
     healthcheck:

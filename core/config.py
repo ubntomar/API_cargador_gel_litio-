@@ -29,7 +29,12 @@ class Settings(BaseSettings):
     
     # Cache Configuration
     CACHE_TTL: int = 2  # 2 segundos de cache
-    REDIS_URL: Optional[str] = None
+    REDIS_URL: Optional[str] = "redis://esp32-redis:6379"  # Default para Docker
+    
+    # Redis Configuration
+    REDIS_MAX_CONNECTIONS: int = 10
+    REDIS_SOCKET_TIMEOUT: int = 5
+    REDIS_HEALTH_CHECK_INTERVAL: int = 30
     
     # Logging
     LOG_LEVEL: str = "INFO"
