@@ -119,7 +119,7 @@ class CustomConfigurationManager:
     
     async def _save_to_file_with_lock(self, configurations: Dict[str, Dict]) -> None:
         """
-        Método para guardar configuraciones con file locking robusto para RISC-V
+        Método simplificado para guardar configuraciones con retry en RISC-V
         
         Args:
             configurations: Configuraciones a guardar
@@ -127,44 +127,75 @@ class CustomConfigurationManager:
         Raises:
             Exception: Si hay error al guardar
         """
-        lock_fd = None
-        temp_file_path = None
+        # Usar un enfoque más simple: retry con delays incrementales
+        max_attempts = 10
+        base_delay = 0.05  # 50ms
         
-        try:
-            # 1. Obtener file lock del sistema operativo
-            lock_fd = await self._acquire_file_lock()
-            
-            # 2. Crear archivo temporal en el mismo directorio (para rename atómico)
-            temp_file_path = self.config_file_path.with_suffix(f'.tmp.{os.getpid()}')
-            
-            # 3. Escribir datos al archivo temporal
-            with open(temp_file_path, 'w', encoding='utf-8') as f:
-                json.dump(configurations, f, indent=2, ensure_ascii=False)
-                f.flush()  # Forzar escritura al disco
-                os.fsync(f.fileno())  # Sincronizar con sistema de archivos
-            
-            # 4. Mover archivo temporal al destino final (operación atómica)
-            temp_file_path.replace(self.config_file_path)
-            temp_file_path = None  # Marcar como movido exitosamente
-            
-            logger.debug(f"✅ Configuraciones guardadas con file lock (PID: {os.getpid()})")
-            
-        except Exception as e:
-            error_msg = f"Error guardando con file lock: {e}"
-            logger.error(f"❌ {error_msg}")
-            raise Exception(error_msg)
-            
-        finally:
-            # Limpiar archivo temporal si existe
-            if temp_file_path and temp_file_path.exists():
-                try:
-                    temp_file_path.unlink()
-                except Exception as cleanup_error:
-                    logger.warning(f"⚠️ Error limpiando archivo temporal: {cleanup_error}")
-            
-            # Liberar file lock
-            if lock_fd is not None:
-                self._release_file_lock(lock_fd)
+        for attempt in range(max_attempts):
+            temp_file_path = None
+            try:
+                # Crear archivo temporal único
+                temp_file_path = self.config_file_path.with_suffix(f'.tmp.{os.getpid()}.{attempt}')
+                
+                # Escribir datos al archivo temporal
+                with open(temp_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(configurations, f, indent=2, ensure_ascii=False)
+                    f.flush()
+                    os.fsync(f.fileno())
+                
+                # Esperar un momento antes del rename para evitar conflictos
+                await asyncio.sleep(base_delay)
+                
+                # Mover archivo temporal al destino final (operación atómica)
+                # En RISC-V, usar shutil.move que es más robusto que Path.replace
+                import shutil
+                shutil.move(str(temp_file_path), str(self.config_file_path))
+                temp_file_path = None  # Marcar como movido exitosamente
+                
+                logger.debug(f"✅ Configuraciones guardadas (intento {attempt + 1}, PID: {os.getpid()})")
+                return  # Éxito, salir
+                
+            except OSError as e:
+                if e.errno == 16:  # Device or resource busy
+                    # Calcular delay incremental
+                    delay = base_delay * (2 ** attempt) + (attempt * 0.01)
+                    logger.warning(f"⚠️ Intento {attempt + 1}/{max_attempts} falló: {e}, reintentando en {delay:.3f}s")
+                    
+                    # Limpiar archivo temporal
+                    if temp_file_path and temp_file_path.exists():
+                        try:
+                            temp_file_path.unlink()
+                        except:
+                            pass
+                    
+                    # Esperar antes del siguiente intento
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    # Error diferente, re-lanzar inmediatamente
+                    raise Exception(f"Error inesperado guardando: {e}")
+                    
+            except Exception as e:
+                error_msg = f"Error guardando (intento {attempt + 1}): {e}"
+                logger.error(f"❌ {error_msg}")
+                
+                # Limpiar archivo temporal
+                if temp_file_path and temp_file_path.exists():
+                    try:
+                        temp_file_path.unlink()
+                    except:
+                        pass
+                
+                # Si no es el último intento, continuar
+                if attempt < max_attempts - 1:
+                    delay = base_delay * (2 ** attempt)
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    raise Exception(error_msg)
+        
+        # Si llegamos aquí, todos los intentos fallaron
+        raise Exception(f"No se pudo guardar después de {max_attempts} intentos")
     
     async def save_configurations(self, configurations_data: str) -> Dict[str, str]:
         """
@@ -237,10 +268,8 @@ class CustomConfigurationManager:
     
     async def _load_configurations_internal(self) -> Dict[str, Dict]:
         """
-        Método interno para cargar configuraciones con file locking robusto
+        Método interno simplificado para cargar configuraciones en RISC-V
         """
-        lock_fd = None
-        
         try:
             logger.info("📋 Cargando configuraciones personalizadas...")
             
@@ -248,40 +277,38 @@ class CustomConfigurationManager:
                 logger.info("📋 Archivo de configuraciones no existe, devolviendo vacío")
                 return {}
             
-            # Obtener shared lock para lectura (permite múltiples lectores)
-            try:
-                lock_fd = os.open(self.lock_file_path, os.O_CREAT | os.O_RDONLY)
-                fcntl.flock(lock_fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-            except (OSError, IOError):
-                # Si no se puede obtener shared lock, intentar sin lock (degraded mode)
-                logger.warning("⚠️ No se pudo obtener shared lock, leyendo sin lock")
-                if lock_fd:
-                    os.close(lock_fd)
-                    lock_fd = None
+            # Leer archivo directamente sin locks para evitar conflictos
+            # En sistemas RISC-V es mejor usar retry que locks complejos
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    with open(self.config_file_path, 'r', encoding='utf-8') as f:
+                        configurations = json.load(f)
+                    
+                    logger.info(f"✅ Cargadas {len(configurations)} configuraciones")
+                    return configurations
+                    
+                except (json.JSONDecodeError, IOError) as e:
+                    if attempt < max_attempts - 1:
+                        # Esperar un poco antes del siguiente intento
+                        await asyncio.sleep(0.05 * (attempt + 1))
+                        continue
+                    else:
+                        # Último intento falló
+                        if isinstance(e, json.JSONDecodeError):
+                            logger.error(f"❌ Error decodificando JSON: {e}")
+                            # Crear archivo limpio en caso de corrupción
+                            await self._create_empty_config_file()
+                            return {}
+                        else:
+                            logger.error(f"❌ Error leyendo archivo: {e}")
+                            return {}
             
-            # Leer archivo de configuraciones
-            with open(self.config_file_path, 'r', encoding='utf-8') as f:
-                configurations = json.load(f)
-            
-            logger.info(f"✅ Cargadas {len(configurations)} configuraciones")
-            return configurations
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ Error decodificando JSON: {e}")
-            # Crear archivo limpio en caso de corrupción
-            await self._create_empty_config_file()
             return {}
+            
         except Exception as e:
             logger.error(f"❌ Error cargando configuraciones: {e}")
             return {}
-        finally:
-            # Liberar lock de lectura
-            if lock_fd is not None:
-                try:
-                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                    os.close(lock_fd)
-                except Exception:
-                    pass
     
     async def _save_to_file(self, configurations: Dict[str, Dict]) -> None:
         """
@@ -568,3 +595,14 @@ class CustomConfigurationManager:
                 "exists": False,
                 "error": str(e)
             }
+    
+    async def _create_empty_config_file(self) -> None:
+        """
+        Crear archivo de configuraciones vacío en caso de corrupción
+        """
+        try:
+            with open(self.config_file_path, 'w', encoding='utf-8') as f:
+                json.dump({}, f, indent=2, ensure_ascii=False)
+            logger.info("📋 Archivo de configuraciones vacío creado")
+        except Exception as e:
+            logger.error(f"❌ Error creando archivo vacío: {e}")
