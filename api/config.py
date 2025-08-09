@@ -760,53 +760,6 @@ async def get_configurations_info():
         logger.error(f"❌ Error obteniendo información: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-# ═══════════════════════════════════════════════════════════════════════════
-# 🔄 ENDPOINTS DE MIGRACIÓN Y STORAGE - ANTES DE RUTAS DINÁMICAS
-# ═══════════════════════════════════════════════════════════════════════════
-
-@router.post("/custom/configurations/migrate", response_model=Dict[str, Any])
-async def migrate_configurations_to_redis():
-    """
-    🔄 MIGRAR configuraciones desde archivo JSON a Redis
-    
-    Este endpoint migra todas las configuraciones existentes desde
-    configuraciones.json a Redis para mejorar la concurrencia y performance.
-    
-    **Beneficios de la migración:**
-    - ✅ Elimina problemas de concurrencia con archivos
-    - ⚡ Mejora significativa de performance 
-    - 🔒 Operaciones atómicas nativas
-    - 📊 Mejor debugging y monitoring
-    
-    **Proceso:**
-    1. Lee configuraciones.json existente
-    2. Transfiere cada configuración a Redis
-    3. Valida integridad de datos
-    4. Proporciona reporte detallado
-    
-    **Nota:** Este proceso es seguro y no elimina el archivo original.
-    """
-    try:
-        logger.info("🔄 Iniciando migración de configuraciones a Redis...")
-        
-        result = await custom_config_manager.migrate_from_file()
-        
-        if "error" in result:
-            logger.error(f"❌ Error en migración: {result['error']}")
-            raise HTTPException(status_code=500, detail=result["error"])
-        
-        logger.info(f"✅ Migración completada: {result.get('migrated_count', 0)} configuraciones")
-        
-        return {
-            "migration_status": "completed",
-            "timestamp": datetime.now().isoformat(),
-            **result
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Error en migración: {e}")
-        raise HTTPException(status_code=500, detail=f"Error en migración: {str(e)}")
-
 @router.get("/custom/configurations/storage-info")
 async def get_storage_info():
     """
@@ -857,7 +810,7 @@ async def load_configurations():
 
 # ============= RUTAS DINÁMICAS (después de las específicas) =============
 
-@router.get("/custom/configurations/{configuration_name}")
+@router.get("/custom/config/{configuration_name}")
 async def get_configuration(configuration_name: str):
     """
     Obtener una configuración específica
@@ -888,7 +841,7 @@ async def get_configuration(configuration_name: str):
         logger.error(f"❌ Error obteniendo configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.post("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
+@router.post("/custom/config/{configuration_name}", response_model=ConfigurationResponse)
 async def save_configuration(configuration_name: str, configuration: CustomConfiguration):
     """
     Guardar una configuración individual
@@ -897,7 +850,7 @@ async def save_configuration(configuration_name: str, configuration: CustomConfi
     con un nombre único.
     """
     try:
-        logger.info(f"� Guardando configuración individual: {configuration_name}")
+        logger.info(f"💾 Guardando configuración individual: {configuration_name}")
         
         # ✅ CORRECCIÓN: Pasar el objeto CustomConfiguration directamente, no .dict()
         result = await custom_config_manager.save_single_configuration(
@@ -914,10 +867,10 @@ async def save_configuration(configuration_name: str, configuration: CustomConfi
         )
         
     except Exception as e:
-        logger.error(f"❌ Error obteniendo configuración '{configuration_name}': {e}")
+        logger.error(f"❌ Error guardando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.delete("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
+@router.delete("/custom/config/{configuration_name}", response_model=ConfigurationResponse)
 async def delete_configuration(configuration_name: str):
     """
     Eliminar una configuración específica
@@ -944,7 +897,7 @@ async def delete_configuration(configuration_name: str):
         logger.error(f"❌ Error eliminando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.post("/custom/configurations/{configuration_name}/apply")
+@router.post("/custom/config/{configuration_name}/apply")
 async def apply_configuration(
     configuration_name: str, 
     esp32_manager: ESP32Manager = Depends(get_esp32_manager)
