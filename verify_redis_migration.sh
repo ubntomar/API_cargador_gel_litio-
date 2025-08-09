@@ -36,7 +36,7 @@ echo ""
 
 # 3. Ejecutar migración
 echo "🔄 3. Ejecutando migración a Redis..."
-MIGRATION_RESULT=$(curl -s -X POST "$BASE_URL/config/custom/configurations/migrate")
+MIGRATION_RESULT=$(curl -s -X POST "$BASE_URL/config/custom/configurations/migrate" -H "Content-Type: application/json" -d '{}')
 echo "$MIGRATION_RESULT" | python3 -m json.tool 2>/dev/null || echo "$MIGRATION_RESULT"
 echo ""
 
