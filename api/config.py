@@ -832,57 +832,6 @@ async def get_storage_info():
         raise HTTPException(status_code=500, detail=f"Error obteniendo información: {str(e)}")
 
 # ============= RUTAS DINÁMICAS (después de las específicas) =============
-@router.get("/custom/configurations", response_model=ConfigurationsListResponse)
-async def load_configurations():
-    """
-    Cargar archivo de configuraciones personalizadas
-    
-    Retorna todas las configuraciones guardadas en el sistema.
-    Si no existen configuraciones, retorna un objeto vacío......
-    """
-    try:
-        logger.info("📋 Cargando configuraciones personalizadas...")
-        
-        configurations = await custom_config_manager.load_configurations()
-        
-        logger.info(f"✅ Cargadas {len(configurations)} configuraciones")
-        
-        return ConfigurationsListResponse(
-            configurations=configurations,
-            total_count=len(configurations)
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Error cargando configuraciones: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-@router.post("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
-async def save_configuration(configuration_name: str, configuration: CustomConfiguration):
-    """
-    Guardar una configuración individual
-    
-    Permite guardar o actualizar una configuración específica
-    con un nombre único.
-    """
-    try:
-        logger.info(f"💾 Guardando configuración individual: {configuration_name}")
-        
-        # ✅ CORRECCIÓN: Pasar el objeto CustomConfiguration directamente, no .dict()
-        result = await custom_config_manager.save_single_configuration(
-            configuration_name, 
-            configuration
-        )
-        
-        logger.info(f"✅ Configuración '{configuration_name}' guardada exitosamente")
-        
-        return ConfigurationResponse(
-            message=result["message"],
-            status=result["status"],
-            configuration_name=configuration_name
-        )
-        
-    except Exception as e:
-        logger.error(f"❌ Error guardando configuración '{configuration_name}': {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @router.get("/custom/configurations/{configuration_name}")
 async def get_configuration(configuration_name: str):
@@ -913,6 +862,30 @@ async def get_configuration(configuration_name: str):
         raise
     except Exception as e:
         logger.error(f"❌ Error obteniendo configuración '{configuration_name}': {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@router.get("/custom/configurations", response_model=ConfigurationsListResponse)
+async def load_configurations():
+    """
+    Cargar archivo de configuraciones personalizadas
+    
+    Retorna todas las configuraciones guardadas en el sistema.
+    Si no existen configuraciones, retorna un objeto vacío......
+    """
+    try:
+        logger.info("📋 Cargando configuraciones personalizadas...")
+        
+        configurations = await custom_config_manager.load_configurations()
+        
+        logger.info(f"✅ Cargadas {len(configurations)} configuraciones")
+        
+        return ConfigurationsListResponse(
+            configurations=configurations,
+            total_count=len(configurations)
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Error cargando configuraciones: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @router.delete("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
