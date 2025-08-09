@@ -23,13 +23,22 @@ from models.custom_configurations import (
 class CustomConfigurationManager:
     """Gestor de configuraciones personalizadas con file locking para RISC-V"""
     
-    def __init__(self, config_file_path: str = "configuraciones.json"):
+    def __init__(self, config_file_path: str = None):
         """
         Inicializar el gestor de configuraciones
         
         Args:
             config_file_path: Ruta al archivo de configuraciones
         """
+        # Determinar la ruta correcta según el entorno
+        if config_file_path is None:
+            # En Docker, usar la ruta del volumen montado
+            if os.path.exists("/app/config"):
+                config_file_path = "/app/config/configuraciones.json"
+            else:
+                # En desarrollo local
+                config_file_path = "configuraciones.json"
+        
         self.config_file_path = Path(config_file_path)
         self.lock_file_path = Path(f"{config_file_path}.lock")
         self.asyncio_lock = asyncio.Lock()
