@@ -831,7 +831,6 @@ async def get_storage_info():
         logger.error(f"❌ Error obteniendo info de storage: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo información: {str(e)}")
 
-# ============= RUTAS GENERALES =============
 @router.get("/custom/configurations", response_model=ConfigurationsListResponse)
 async def load_configurations():
     """
