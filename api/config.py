@@ -837,7 +837,7 @@ async def load_configurations():
     Cargar archivo de configuraciones personalizadas
     
     Retorna todas las configuraciones guardadas en el sistema.
-    Si no existen configuraciones, retorna un objeto vacío.
+    Si no existen configuraciones, retorna un objeto vacío......
     """
     try:
         logger.info("📋 Cargando configuraciones personalizadas...")
