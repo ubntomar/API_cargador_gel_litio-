@@ -23,7 +23,7 @@ echo ""
 
 # 1. Verificar información de storage
 echo "📊 1. Verificando información de storage..."
-STORAGE_INFO=$(curl -s "$BASE_URL/config/custom/configurations/storage-info")
+STORAGE_INFO=$(curl -s "$BASE_URL/config/custom/configurations/info")
 echo "$STORAGE_INFO" | python3 -m json.tool 2>/dev/null || echo "$STORAGE_INFO"
 echo ""
 
@@ -50,7 +50,7 @@ echo ""
 
 # 5. Verificar información de storage actualizada
 echo "📊 5. Información de storage post-migración..."
-STORAGE_INFO_AFTER=$(curl -s "$BASE_URL/config/custom/configurations/storage-info")
+STORAGE_INFO_AFTER=$(curl -s "$BASE_URL/config/custom/configurations/info")
 echo "$STORAGE_INFO_AFTER" | python3 -m json.tool 2>/dev/null || echo "$STORAGE_INFO_AFTER"
 echo ""
 

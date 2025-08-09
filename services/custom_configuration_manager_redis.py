@@ -76,11 +76,14 @@ class CustomConfigurationManagerRedis:
                 "updatedAt": datetime.now().isoformat()
             })
             
+            # Convertir tipos para Redis (Redis solo acepta strings)
+            redis_data = self._convert_to_redis_types(config_data)
+            
             # Guardar en Redis como hash - operación atómica
             key = f"{self.key_prefix}{name}"
             pipe = self.redis_client.pipeline()
             pipe.delete(key)  # Limpiar key existente
-            pipe.hset(key, mapping=config_data)  # Guardar nueva configuración
+            pipe.hset(key, mapping=redis_data)  # Guardar nueva configuración
             pipe.execute()
             
             logger.info(f"✅ Configuración '{name}' guardada exitosamente en Redis")
@@ -358,6 +361,22 @@ class CustomConfigurationManagerRedis:
                 converted[key] = value.lower() in ["true", "1", "yes"]
             else:
                 converted[key] = value
+        
+        return converted
+
+    def _convert_to_redis_types(self, data: Dict[str, Any]) -> Dict[str, str]:
+        """Convertir tipos Python a strings para Redis"""
+        converted = {}
+        
+        for key, value in data.items():
+            if isinstance(value, bool):
+                converted[key] = "true" if value else "false"
+            elif isinstance(value, (int, float)):
+                converted[key] = str(value)
+            elif value is None:
+                converted[key] = ""
+            else:
+                converted[key] = str(value)
         
         return converted
 
