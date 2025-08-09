@@ -831,6 +831,7 @@ async def get_storage_info():
         logger.error(f"❌ Error obteniendo info de storage: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo información: {str(e)}")
 
+# ============= RUTAS DINÁMICAS (después de las específicas) =============
 @router.get("/custom/configurations", response_model=ConfigurationsListResponse)
 async def load_configurations():
     """
@@ -854,8 +855,6 @@ async def load_configurations():
     except Exception as e:
         logger.error(f"❌ Error cargando configuraciones: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
-
-# ============= RUTAS DINÁMICAS (después de las específicas) =============
 @router.post("/custom/configurations/{configuration_name}", response_model=ConfigurationResponse)
 async def save_configuration(configuration_name: str, configuration: CustomConfiguration):
     """
