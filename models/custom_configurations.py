@@ -49,18 +49,36 @@ class CustomConfiguration(BaseModel):
 
 class ConfigurationData(BaseModel):
     """Modelo para el payload de guardado de configuraciones"""
-    data: str = Field(..., description="Datos de configuraciones como string JSON")
+    data: Dict[str, Dict[str, Any]] = Field(..., description="Diccionario de configuraciones {nombre: configuración}")
     
     @validator('data')
-    def validate_json_data(cls, v):
-        """Validar que los datos sean JSON válido"""
-        try:
-            parsed_data = json.loads(v)
-            if not isinstance(parsed_data, dict):
-                raise ValueError("Los datos deben ser un objeto JSON")
-            return v
-        except json.JSONDecodeError as e:
-            raise ValueError(f"JSON inválido: {str(e)}")
+    def validate_configurations_data(cls, v):
+        """Validar que cada configuración en el diccionario sea válida"""
+        if not isinstance(v, dict):
+            raise ValueError("Los datos deben ser un diccionario")
+        
+        if len(v) == 0:
+            raise ValueError("Debe proporcionar al menos una configuración")
+        
+        for config_name, config_data in v.items():
+            if not isinstance(config_name, str) or len(config_name.strip()) == 0:
+                raise ValueError(f"Nombre de configuración inválido: '{config_name}'")
+            
+            if not isinstance(config_data, dict):
+                raise ValueError(f"Datos de configuración para '{config_name}' deben ser un objeto")
+                
+            # Validar campos requeridos básicos
+            required_fields = [
+                'batteryCapacity', 'isLithium', 'thresholdPercentage', 'maxAllowedCurrent',
+                'bulkVoltage', 'absorptionVoltage', 'floatVoltage', 'useFuenteDC', 
+                'fuenteDC_Amps', 'factorDivider'
+            ]
+            
+            missing_fields = [field for field in required_fields if field not in config_data]
+            if missing_fields:
+                raise ValueError(f"Configuración '{config_name}' falta campos: {missing_fields}")
+        
+        return v
 
 class ConfigurationRequest(BaseModel):
     """Modelo para solicitud de creación/actualización de configuración"""
@@ -96,19 +114,26 @@ class ConfigurationExportResponse(BaseModel):
 
 class ConfigurationImportRequest(BaseModel):
     """Modelo para solicitud de importación"""
-    configurations_data: str = Field(..., description="Datos JSON de configuraciones a importar")
+    configurations_data: Dict[str, Dict[str, Any]] = Field(..., description="Diccionario de configuraciones a importar")
     overwrite_existing: bool = Field(default=False, description="Si sobrescribir configuraciones existentes")
     
     @validator('configurations_data')
     def validate_import_data(cls, v):
         """Validar datos de importación"""
-        try:
-            parsed_data = json.loads(v)
-            if not isinstance(parsed_data, dict):
-                raise ValueError("Los datos deben ser un objeto JSON")
-            return v
-        except json.JSONDecodeError as e:
-            raise ValueError(f"JSON inválido: {str(e)}")
+        if not isinstance(v, dict):
+            raise ValueError("Los datos deben ser un diccionario")
+        
+        if len(v) == 0:
+            raise ValueError("Debe proporcionar al menos una configuración para importar")
+            
+        for config_name, config_data in v.items():
+            if not isinstance(config_name, str) or len(config_name.strip()) == 0:
+                raise ValueError(f"Nombre de configuración inválido: '{config_name}'")
+            
+            if not isinstance(config_data, dict):
+                raise ValueError(f"Datos de configuración para '{config_name}' deben ser un objeto")
+        
+        return v
 
 class ConfigurationImportResponse(BaseModel):
     """Modelo para respuesta de importación"""

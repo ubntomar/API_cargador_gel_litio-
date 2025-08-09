@@ -222,55 +222,56 @@ class CustomConfigurationManagerRedis:
     
     async def import_configurations(
         self, 
-        configurations_data: str, 
+        configurations_dict: Dict[str, CustomConfiguration], 
         overwrite_existing: bool = False
-    ) -> Dict[str, Any]:
-        """Importar configuraciones desde JSON"""
+    ) -> Any:
+        """Importar configuraciones desde diccionario de CustomConfiguration"""
         try:
-            # Parsear JSON
-            import_data = json.loads(configurations_data)
+            from models.custom_configurations import ConfigurationImportResponse
             
-            if "configurations" not in import_data:
-                raise ValueError("Formato de datos inválido: falta 'configurations'")
-            
-            configurations = import_data["configurations"]
             imported_count = 0
             skipped_count = 0
-            errors = []
+            errors = {}
+            warnings = {}
             
-            for name, config_data in configurations.items():
+            for name, configuration in configurations_dict.items():
                 try:
                     # Verificar si ya existe
                     existing = await self.get_configuration(name)
                     
                     if existing and not overwrite_existing:
                         skipped_count += 1
+                        warnings[name] = "Configuración ya existe y overwrite_existing=False"
                         continue
                     
-                    # Convertir a modelo de configuración
-                    # Remover timestamps para regenerarlos
-                    clean_config = {k: v for k, v in config_data.items() 
-                                  if k not in ["createdAt", "updatedAt"]}
-                    
-                    configuration = CustomConfiguration(**clean_config)
+                    # Guardar la configuración
                     await self.save_single_configuration(name, configuration)
                     imported_count += 1
+                    logger.debug(f"✅ Configuración '{name}' importada exitosamente")
                     
                 except Exception as e:
-                    errors.append(f"Error importando '{name}': {e}")
+                    errors[name] = str(e)
+                    logger.error(f"❌ Error importando '{name}': {e}")
             
-            return {
-                "message": "Importación completada",
-                "status": "success",
-                "imported_count": imported_count,
-                "skipped_count": skipped_count,
-                "errors": errors,
-                "storage": "redis" if self._is_redis_available() else "file"
-            }
+            success = imported_count > 0 or skipped_count > 0
+            
+            return ConfigurationImportResponse(
+                success=success,
+                imported_count=imported_count,
+                skipped_count=skipped_count,
+                errors=errors if errors else None,
+                warnings=warnings if warnings else None
+            )
             
         except Exception as e:
             logger.error(f"❌ Error importando configuraciones: {e}")
-            raise Exception(f"Error al importar: {e}")
+            from models.custom_configurations import ConfigurationImportResponse
+            return ConfigurationImportResponse(
+                success=False,
+                imported_count=0,
+                skipped_count=0,
+                errors={"general": str(e)}
+            )
     
     async def validate_configuration(self, configuration: CustomConfiguration) -> Dict[str, Any]:
         """Validar configuración"""

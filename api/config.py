@@ -617,7 +617,20 @@ async def save_configurations(config_data: ConfigurationData):
     try:
         logger.info("💾 Guardando configuraciones personalizadas...")
         
-        result = await custom_config_manager.save_configurations(config_data.data)
+        # Convertir los datos del diccionario a objetos CustomConfiguration
+        configurations_dict = {}
+        for config_name, config_raw_data in config_data.data.items():
+            try:
+                # Crear objeto CustomConfiguration desde los datos raw
+                configuration = CustomConfiguration(**config_raw_data)
+                configurations_dict[config_name] = configuration
+                logger.debug(f"✅ Configuración '{config_name}' validada correctamente")
+            except Exception as e:
+                logger.error(f"❌ Error validando configuración '{config_name}': {e}")
+                raise ValueError(f"Error en configuración '{config_name}': {str(e)}")
+        
+        # Guardar usando el manager
+        result = await custom_config_manager.save_configurations(configurations_dict)
         
         logger.info("✅ Configuraciones guardadas exitosamente")
         
@@ -704,8 +717,20 @@ async def import_configurations(import_request: ConfigurationImportRequest):
     try:
         logger.info("📥 Importando configuraciones...")
         
+        # Convertir los datos del diccionario a formato que espera el manager
+        configurations_dict = {}
+        for config_name, config_raw_data in import_request.configurations_data.items():
+            try:
+                # Crear objeto CustomConfiguration desde los datos raw
+                configuration = CustomConfiguration(**config_raw_data)
+                configurations_dict[config_name] = configuration
+                logger.debug(f"✅ Configuración de importación '{config_name}' validada")
+            except Exception as e:
+                logger.error(f"❌ Error validando configuración de importación '{config_name}': {e}")
+                raise ValueError(f"Error en configuración '{config_name}': {str(e)}")
+        
         result = await custom_config_manager.import_configurations(
-            import_request.configurations_data,
+            configurations_dict,
             import_request.overwrite_existing
         )
         
