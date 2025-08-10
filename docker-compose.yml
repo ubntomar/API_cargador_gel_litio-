@@ -19,7 +19,7 @@ services:
     
     # 🔧 CONFIGURACIÓN DE PUERTO SERIAL
     devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"  # ← CAMBIAR según tu puerto
+      - "/dev/ttyUSB1:/dev/ttyUSB1"  # ← CAMBIAR según tu puerto
     
     # Puertos de red
     ports:
@@ -33,7 +33,7 @@ services:
     # ✅ VARIABLES DE ENTORNO CORREGIDAS
     environment:
       # Configuración ESP32
-      - SERIAL_PORT=/dev/ttyUSB0
+      - SERIAL_PORT=/dev/ttyUSB1
       - SERIAL_BAUDRATE=9600
       - SERIAL_TIMEOUT=3.0
       - HOST=0.0.0.0

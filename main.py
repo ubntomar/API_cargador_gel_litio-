@@ -40,8 +40,11 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Iniciando ESP32 Solar Charger API con Schedule...")
     
     try:
-        # Inicializar ESP32 Manager
-        esp32_manager = ESP32Manager()
+        # Inicializar ESP32 Manager con configuración correcta
+        esp32_manager = ESP32Manager(
+            port=settings.SERIAL_PORT,
+            baudrate=settings.SERIAL_BAUDRATE
+        )
         
         if await esp32_manager.start():
             logger.info("✅ ESP32 Manager iniciado correctamente")
