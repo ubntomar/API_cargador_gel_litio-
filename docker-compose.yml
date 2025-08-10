@@ -6,7 +6,7 @@
 # Ejecutar desde: ./API_cargador_gel_litio-/
 
 
-version: '3.8'
+# version: '3.8'  # ← Comentado para evitar warning
 
 services:
   esp32-api:
