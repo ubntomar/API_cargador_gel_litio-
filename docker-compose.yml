@@ -26,7 +26,7 @@ services:
       - "8000:8000"  # API HTTP
     
     # ✅ CONFIGURACIÓN MULTI-CPU CORREGIDA (sintaxis compatible)
-    cpus: 4.0                    # Usar 4 CPUs (sintaxis v3.8)
+    cpus: 6.0                    # Usar 4 CPUs (sintaxis v3.8)
     mem_limit: 1512m             # Límite memoria
     memswap_limit: 1512m         # Límite swap
     
