@@ -1045,3 +1045,31 @@ async def apply_configuration(
     except Exception as e:
         logger.error(f"❌ Error aplicando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+@router.get("/custom/configurations/applied")
+async def get_applied_configuration():
+    """
+    Obtener información sobre la última configuración aplicada
+    
+    Retorna detalles sobre la configuración que está actualmente
+    activa en el ESP32.
+    """
+    try:
+        logger.info("📋 Obteniendo configuración aplicada...")
+        
+        # Por ahora, devolvemos información básica
+        # En una implementación completa, esto podría trackear la última configuración aplicada
+        applied_info = {
+            "message": "Información de configuración aplicada no está disponible en esta versión",
+            "status": "info_not_available",
+            "timestamp": datetime.now().isoformat(),
+            "note": "Para verificar parámetros actuales del ESP32, use el endpoint /data/real-time"
+        }
+        
+        logger.info("✅ Información de configuración aplicada obtenida")
+        
+        return applied_info
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo configuración aplicada: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

@@ -28,7 +28,7 @@ RESPONSE=$(curl -s -X POST \
     "fuenteDC_Amps": 0.0,
     "factorDivider": 5
   }' \
-  "$BASE_URL/config/custom/configurations/TestGel100Ah")
+  "$BASE_URL/config/custom/config/TestGel100Ah")
 
 echo "$RESPONSE" | jq '.'
 
@@ -53,13 +53,13 @@ curl -s -X POST \
     "fuenteDC_Amps": 10.0,
     "factorDivider": 3
   }' \
-  "$BASE_URL/config/custom/configurations/TestLitio200Ah" | jq '.'
+  "$BASE_URL/config/custom/config/TestLitio200Ah" | jq '.'
 
 echo -e "\n6️⃣ Verificando ambas configuraciones..."
 curl -s "$BASE_URL/config/custom/configurations" | jq '.'
 
 echo -e "\n7️⃣ Aplicando configuración Litio..."
-curl -s -X POST "$BASE_URL/config/custom/configurations/TestLitio200Ah/apply" | jq '.'
+curl -s -X POST "$BASE_URL/config/custom/config/TestLitio200Ah/apply" | jq '.'
 
 echo -e "\n8️⃣ Verificando configuración aplicada..."
 curl -s "$BASE_URL/config/custom/configurations/applied" | jq '.'
