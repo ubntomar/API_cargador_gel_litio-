@@ -809,6 +809,21 @@ async def get_storage_info():
         logger.error(f"❌ Error obteniendo info de storage: {e}")
         raise HTTPException(status_code=500, detail=f"Error obteniendo información: {str(e)}")
 
+# NUEVO: Endpoint con la ruta que esperan los tests y documentación
+@router.post("/custom/configurations/{configuration_name}/apply")
+async def apply_configuration_alt(
+    configuration_name: str, 
+    esp32_manager: ESP32Manager = Depends(get_esp32_manager)
+):
+    """
+    Aplicar una configuración guardada (ruta alternativa)
+    
+    Esta es la ruta que esperan los tests y la documentación.
+    Redirecta a la misma funcionalidad que /custom/config/{name}/apply
+    """
+    # Redirigir a la función principal
+    return await apply_configuration(configuration_name, esp32_manager)
+
 @router.get("/custom/configurations", response_model=ConfigurationsListResponse)
 async def load_configurations():
     """
@@ -933,17 +948,35 @@ async def apply_configuration(
     Aplica todos los parámetros de una configuración guardada
     al ESP32, configurando la batería según los valores almacenados.
     """
+    # DEBUG: Log inmediato al entrar en la función
+    logger.info(f"🎯 DEBUG - INICIO apply_configuration para: {configuration_name}")
+    
     try:
         logger.info(f"🔧 Aplicando configuración: {configuration_name}")
         
         # Obtener la configuración
-        configuration = await custom_config_manager.get_configuration(configuration_name)
+        configuration_data = await custom_config_manager.get_configuration(configuration_name)
         
-        if configuration is None:
+        # DEBUG: Log de la configuración obtenida
+        logger.info(f"🔍 DEBUG - Configuración obtenida: {configuration_data}")
+        logger.info(f"🔍 DEBUG - Tipo de configuración: {type(configuration_data)}")
+        
+        if configuration_data is None:
             raise HTTPException(
                 status_code=404, 
                 detail=f"Configuración '{configuration_name}' no encontrada"
             )
+        
+        # ✅ CORRECCIÓN: Extraer la configuración real del wrapper
+        if isinstance(configuration_data, dict) and 'configuration' in configuration_data:
+            configuration = configuration_data['configuration']
+            logger.info(f"🔍 DEBUG - Configuración extraída del wrapper: {configuration}")
+        else:
+            configuration = configuration_data
+            logger.info(f"🔍 DEBUG - Usando configuración directa: {configuration}")
+        
+        if configuration:
+            logger.info(f"🔍 DEBUG - Keys en configuración: {list(configuration.keys()) if hasattr(configuration, 'keys') else 'No tiene keys'}")
         
         # Verificar conexión ESP32
         if not esp32_manager or not esp32_manager.connected:
@@ -971,7 +1004,14 @@ async def apply_configuration(
             "factorDivider": "factorDivider"
         }
         
+        # DEBUG: Log del mapeo y verificación
+        logger.info(f"🔍 DEBUG - Param mapping definido con {len(param_mapping)} parámetros")
+        logger.info(f"🔍 DEBUG - Iniciando bucle de aplicación...")
+        
         for config_key, esp32_param in param_mapping.items():
+            logger.info(f"🔍 DEBUG - Procesando {config_key} -> {esp32_param}")
+            logger.info(f"🔍 DEBUG - ¿{config_key} in configuration? {config_key in configuration if configuration else 'configuration is None'}")
+            
             if config_key in configuration:
                 try:
                     value = configuration[config_key]
@@ -1045,6 +1085,7 @@ async def apply_configuration(
     except Exception as e:
         logger.error(f"❌ Error aplicando configuración '{configuration_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
 
 @router.get("/custom/configurations/applied")
 async def get_applied_configuration():

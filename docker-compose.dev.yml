@@ -1,0 +1,35 @@
+# =============================================================================
+# ESP32 Solar Charger API - Docker Compose para DESARROLLO
+# =============================================================================
+# Para usar este archivo:
+# docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# version: '3.8'  # ← Comentado para evitar warning
+
+services:
+  esp32-api:
+    # Override para desarrollo
+    volumes:
+      # Volúmenes base (heredados del docker-compose.yml principal)
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - .:/app/config:rw
+      - /etc/localtime:/etc/localtime:ro
+      
+      # 🔧 DESARROLLO: Montar código fuente para hot-reload
+      - ./api:/app/api:rw
+      - ./services:/app/services:rw
+      - ./models:/app/models:rw
+      - ./core:/app/core:rw
+      - ./main.py:/app/main.py:rw
+      - ./requirements.txt:/app/requirements.txt:ro
+    
+    # Variables adicionales para desarrollo
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      
+    # Comando para desarrollo con auto-reload
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]

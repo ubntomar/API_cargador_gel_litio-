@@ -68,12 +68,19 @@ services:
       - MALLOC_MMAP_THRESHOLD_=131072
       - MALLOC_TRIM_THRESHOLD_=131072
     
-    # Volúmenes para persistencia
+    # Volúmenes para persistencia y desarrollo
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
       - .:/app/config:rw
       - /etc/localtime:/etc/localtime:ro
+      # 🔧 DESARROLLO: Montar código fuente para hot-reload
+      - ./api:/app/api:rw
+      - ./services:/app/services:rw
+      - ./models:/app/models:rw
+      - ./core:/app/core:rw
+      - ./main.py:/app/main.py:rw
+      - ./requirements.txt:/app/requirements.txt:ro
     
     # Política de reinicio
     restart: unless-stopped
