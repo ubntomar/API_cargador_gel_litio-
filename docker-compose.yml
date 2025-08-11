@@ -17,9 +17,13 @@ services:
     image: esp32-solar-api:latest
     container_name: esp32-solar-charger-api
     
-    # 🔧 CONFIGURACIÓN DE PUERTO SERIAL
+    # 🔧 CONFIGURACIÓN DE PUERTO SERIAL DINÁMICO
     devices:
-      - "/dev/ttyUSB0:/dev/ttyUSB0"  # ← CAMBIAR según tu puerto
+      - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"  # Puerto desde .env,  /dev/ttyUSB0 fallback
+    
+    # Cargar variables desde archivo .env
+    env_file:
+      - .env
     
     # Puertos de red
     ports:
@@ -30,20 +34,20 @@ services:
     mem_limit: 1512m             # Límite memoria
     memswap_limit: 1512m         # Límite swap
     
-    # ✅ VARIABLES DE ENTORNO CORREGIDAS
+    # ✅ VARIABLES DE ENTORNO DESDE .env
     environment:
-      # Configuración ESP32
-      - SERIAL_PORT=/dev/ttyUSB0
-      - SERIAL_BAUDRATE=9600
-      - SERIAL_TIMEOUT=3.0
-      - HOST=0.0.0.0
-      - PORT=8000
-      - DEBUG=false
-      - LOG_LEVEL=INFO
-      - MIN_COMMAND_INTERVAL=0.6
-      - MAX_REQUESTS_PER_MINUTE=60
-      - CACHE_TTL=2
-      - TZ=America/Bogota
+      # Configuración ESP32 (desde .env)
+      - SERIAL_PORT=${SERIAL_PORT:-/dev/ttyUSB0}
+      - SERIAL_BAUDRATE=${SERIAL_BAUDRATE:-9600}
+      - SERIAL_TIMEOUT=${SERIAL_TIMEOUT:-3.0}
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8000}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MIN_COMMAND_INTERVAL=${MIN_COMMAND_INTERVAL:-0.6}
+      - MAX_REQUESTS_PER_MINUTE=${MAX_REQUESTS_PER_MINUTE:-60}
+      - CACHE_TTL=${CACHE_TTL:-2}
+      - TZ=${TZ:-America/Bogota}
       
       # ✅ REDIS CONFIGURATION
       - REDIS_URL=redis://esp32-redis:6379
