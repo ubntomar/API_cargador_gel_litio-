@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/esp32_api.log"
     
+    # Timezone Configuration
+    TZ: str = "America/Bogota"
+    
     class Config:
         env_file = ".env"
     
