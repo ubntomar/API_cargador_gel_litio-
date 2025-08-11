@@ -240,6 +240,117 @@ crontab -e
 
 ---
 
+## 🔧 **GUÍA DE DESARROLLO Y DEBUGGING**
+
+### 🐛 **Resolución de Problemas Docker (Actualizado Agosto 2025)**
+
+#### ⚠️ **PROBLEMA COMÚN: Cambios no se reflejan en el contenedor**
+
+**Síntoma:** Modificas código Python pero los cambios no aparecen cuando usas la API
+
+**Causa raíz:** Docker estaba usando código en caché. Los volúmenes no estaban configurados para desarrollo.
+
+**✅ SOLUCIÓN IMPLEMENTADA (Opción 1 - Recomendada):**
+
+El `docker-compose.yml` ahora incluye volúmenes para desarrollo en vivo:
+
+```yaml
+volumes:
+  # 🔧 DESARROLLO: Montar código fuente para hot-reload
+  - ./api:/app/api:rw
+  - ./services:/app/services:rw
+  - ./models:/app/models:rw
+  - ./core:/app/core:rw
+  - ./main.py:/app/main.py:rw
+```
+
+**Para aplicar cambios después de git pull:**
+
+```bash
+# 1. Detener contenedores
+docker compose down
+
+# 2. Recrear con código actualizado (forzar rebuild si es necesario)
+docker compose up -d --build
+
+# 3. Si persisten problemas, rebuild completo:
+docker compose build --no-cache
+docker compose up -d
+```
+
+#### 🔍 **Debugging de Endpoints que "se ejecutan pero no aplican cambios"**
+
+**Caso específico resuelto:** `/config/custom/config/{name}/apply`
+
+1. **Verificar que el código está actualizado en el contenedor:**
+   ```bash
+   # Comparar líneas de código
+   docker exec esp32-solar-charger-api wc -l /app/api/config.py
+   wc -l api/config.py
+   # Deben ser iguales
+   ```
+
+2. **Verificar logs de debug en tiempo real:**
+   ```bash
+   # Ver logs del contenedor
+   docker logs esp32-solar-charger-api --tail 20 -f
+   
+   # Probar endpoint
+   curl -X POST http://localhost:8000/config/custom/config/BateriaGEL200Ah/apply
+   ```
+
+3. **Problema encontrado y corregido:**
+   - La configuración se obtenía con estructura wrapper: `{'configuration_name': 'X', 'configuration': {...}}`
+   - El código buscaba parámetros en el nivel raíz en lugar de en `configuration['configuration']`
+   - **Fix aplicado:** Extracción correcta de la configuración del wrapper Redis
+
+#### 📋 **Comandos útiles para desarrollo:**
+
+```bash
+# Reiniciar solo el contenedor de la API (mantiene Redis)
+docker restart esp32-solar-charger-api
+
+# Ver estructura de archivos en el contenedor
+docker exec esp32-solar-charger-api ls -la /app/api/
+
+# Ejecutar comando dentro del contenedor
+docker exec -it esp32-solar-charger-api bash
+
+# Verificar conexiones de red
+docker compose ps
+```
+
+#### 🎯 **Flujo de desarrollo recomendado:**
+
+1. **Desarrollo local con live reload habilitado**
+2. **Cambios se reflejan automáticamente** (gracias a volúmenes configurados)
+3. **Para cambios estructurales:** `docker compose restart esp32-solar-charger-api`
+4. **Para nuevas dependencias:** `docker compose up -d --build`
+
+#### 🛠️ **Scripts de Troubleshooting Automatizado**
+
+**Para debugging automático:** Usa los scripts incluidos:
+
+```bash
+# Diagnóstico automático de problemas Docker
+./docker_troubleshoot.sh
+
+# Ver guía de debugging en quick setup
+bash quick_setup.sh debug
+
+# Debugging completo de API y Docker
+./debug_api_issues.sh
+```
+
+**Comandos del script de troubleshooting:**
+```bash
+./docker_troubleshoot.sh diagnose    # Diagnosticar problemas
+./docker_troubleshoot.sh fix         # Arreglar automáticamente
+./docker_troubleshoot.sh debug       # Ver comandos de debugging
+```
+
+---
+
 crontab -e
 
 # Agregar al final:

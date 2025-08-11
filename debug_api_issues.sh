@@ -153,6 +153,50 @@ done
 
 echo ""
 echo -e "${BLUE}=== DIAGNÓSTICO COMPLETO ===${NC}"
+
+# 7. NUEVO: Diagnóstico específico de Docker
+echo ""
+echo -e "${YELLOW}=== 7. DIAGNÓSTICO DOCKER ===${NC}"
+
+echo "Verificando si el código del container está actualizado..."
+
+# Verificar si Docker está corriendo
+if docker ps | grep -q "esp32-solar-api"; then
+    container_name=$(docker ps --format "table {{.Names}}" | grep esp32)
+    if [ -n "$container_name" ]; then
+        echo "Container encontrado: $container_name"
+        
+        # Comparar líneas de código entre container y host
+        if [ -f "api/config.py" ]; then
+            host_lines=$(wc -l < api/config.py)
+            container_lines=$(docker exec "$container_name" wc -l < /app/api/config.py 2>/dev/null || echo "0")
+            
+            echo "Líneas en host: $host_lines"
+            echo "Líneas en container: $container_lines"
+            
+            if [ "$host_lines" -eq "$container_lines" ]; then
+                echo -e "${GREEN}✅ Código sincronizado${NC}"
+            else
+                echo -e "${RED}❌ CÓDIGO DESINCRONIZADO - Este puede ser el problema${NC}"
+                echo -e "${YELLOW}Solución: docker-compose down && docker-compose up -d${NC}"
+            fi
+        fi
+        
+        # Verificar volúmenes
+        echo ""
+        echo "Verificando configuración de volúmenes..."
+        if docker inspect "$container_name" | grep -q "/app/api"; then
+            echo -e "${GREEN}✅ Volúmenes de desarrollo configurados${NC}"
+        else
+            echo -e "${RED}❌ Volúmenes de desarrollo NO configurados${NC}"
+            echo -e "${YELLOW}Necesitas configurar volumes en docker-compose.yml${NC}"
+        fi
+    fi
+else
+    echo -e "${RED}❌ Container de ESP32 API no está corriendo${NC}"
+fi
+
+echo ""
 echo "Archivos generados:"
 echo "  • debug_full_data.json - JSON completo de la API"
 echo "  • /tmp/debug_*.tmp - Respuestas de pruebas"

@@ -35,6 +35,39 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Función de debugging para problemas comunes de Docker
+show_docker_debugging_help() {
+    print_header "🐛 GUÍA DE DEBUGGING DOCKER"
+    
+    echo -e "${YELLOW}Problemas Comunes y Soluciones:${NC}"
+    echo ""
+    
+    echo -e "${CYAN}1. El endpoint funciona pero no aplica cambios:${NC}"
+    echo "   • Problema: Docker usa código en caché"
+    echo "   • Verificar: docker exec -it esp32-solar-api-web-1 cat /app/api/config.py | wc -l"
+    echo "   • Comparar: wc -l api/config.py"
+    echo "   • Solución: docker-compose down && docker-compose up -d"
+    echo ""
+    
+    echo -e "${CYAN}2. Código no se actualiza automáticamente:${NC}"
+    echo "   • Verificar volumes en docker-compose.yml:"
+    echo "     - ./api:/app/api"
+    echo "     - ./services:/app/services"
+    echo "     - ./models:/app/models"
+    echo "     - ./core:/app/core"
+    echo ""
+    
+    echo -e "${CYAN}3. Comandos útiles de debugging:${NC}"
+    echo "   • Ver archivos en container: docker exec -it esp32-solar-api-web-1 ls -la /app"
+    echo "   • Ver logs: docker-compose logs -f web"
+    echo "   • Reiniciar limpio: docker-compose down && docker-compose up -d"
+    echo "   • Inspeccionar container: docker exec -it esp32-solar-api-web-1 /bin/bash"
+    echo ""
+    
+    echo -e "${YELLOW}💡 TIP: Ejecuta 'bash quick_setup.sh debug' para mostrar esta ayuda${NC}"
+    echo ""
+}
+
 # Detectar puerto serial automáticamente
 detect_esp32_port() {
     print_header "🔍 DETECCIÓN AUTOMÁTICA DE PUERTO ESP32"
@@ -151,6 +184,13 @@ configure_project() {
     print_header "⚙️ CONFIGURANDO PROYECTO"
     
     print_status "Configurando docker-compose.yml..."
+    
+    # NOTA IMPORTANTE: Para desarrollo con live-reload, el docker-compose.yml debe incluir
+    # volúmenes mapeados para que los cambios de código se reflejen inmediatamente.
+    # Si experimentas problemas donde el código no se actualiza, verifica:
+    # 1. Que existan volumes: ./api:/app/api, ./services:/app/services, etc.
+    # 2. Ejecuta 'docker exec -it <container> ls -la /app' para verificar archivos
+    # 3. Usa 'docker-compose down && docker-compose up -d' para reiniciar limpio
     
     # Actualizar docker-compose.yml
     if [ -f "docker-compose.yml" ]; then
@@ -315,6 +355,14 @@ build_and_start() {
     
     # Iniciar servicios
     print_status "Iniciando servicios Docker..."
+    
+    # DEBUGGING: Si los cambios de código no se aplican después del docker-compose up:
+    # 1. Verifica que docker-compose.yml tenga volumes mapeados para desarrollo
+    # 2. Ejecuta: docker exec -it esp32-solar-api-web-1 cat /app/api/config.py | wc -l
+    # 3. Compara con: wc -l api/config.py (deben coincidir las líneas)
+    # 4. Si no coinciden, hay problema de caché/volúmenes
+    # 5. Solución: docker-compose down && docker-compose up -d
+    
     docker-compose up -d
     
     print_success "✅ Servicios iniciados"
@@ -414,6 +462,12 @@ show_final_info() {
 
 # Función principal
 main() {
+    # Verificar si se solicitó ayuda de debugging
+    if [ "$1" = "debug" ] || [ "$1" = "--debug" ] || [ "$1" = "help" ]; then
+        show_docker_debugging_help
+        exit 0
+    fi
+    
     print_header "ESP32 API - SETUP RÁPIDO MULTIPLATAFORMA"
     
     echo -e "${CYAN}Este script hará automáticamente:${NC}"
@@ -422,6 +476,8 @@ main() {
     echo -e "${CYAN}• Construir imagen optimizada para tu arquitectura${NC}"
     echo -e "${CYAN}• Iniciar todos los servicios${NC}"
     echo -e "${CYAN}• Verificar que todo funcione${NC}"
+    echo ""
+    echo -e "${YELLOW}💡 TIP: Ejecuta 'bash quick_setup.sh debug' para ver guía de debugging Docker${NC}"
     echo ""
     
     # Mostrar información de la plataforma
