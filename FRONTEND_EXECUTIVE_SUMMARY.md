@@ -32,9 +32,9 @@ Body: {"parameter": "useFuenteDC", "value": true}
 ### 3. 📋 **Gestión de Configuraciones**
 ```http
 GET  /config/custom/configurations              # Listar
-POST /config/custom/configurations/{name}       # Crear
-POST /config/custom/configurations/{name}/apply # Aplicar
-DELETE /config/custom/configurations/{name}     # Eliminar
+POST /config/custom/config/{name}               # Crear
+POST /config/custom/config/{name}/apply         # Aplicar
+DELETE /config/custom/config/{name}             # Eliminar
 ```
 - **Función:** Sistema completo de configuraciones predefinidas
 - **Características:** CRUD completo, búsqueda, exportación

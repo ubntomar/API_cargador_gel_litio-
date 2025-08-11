@@ -83,7 +83,7 @@ def main():
     
     # 4. Probar guardar configuración individual
     print("\n💾 4. GUARDAR CONFIGURACIÓN INDIVIDUAL")
-    save_result = test_endpoint('POST', '/config/custom/configurations/TestBateria100Ah', 
+    save_result = test_endpoint('POST', '/config/custom/config/TestBateria100Ah', 
                                config_data, expected_status=[200, 201, 422])
     
     # 5. Probar exportar configuraciones
@@ -97,7 +97,7 @@ def main():
     
     # 7. Probar obtener configuración específica
     print("\n🔍 7. OBTENER CONFIGURACIÓN ESPECÍFICA")
-    specific = test_endpoint('GET', '/config/custom/configurations/TestBateria100Ah',
+    specific = test_endpoint('GET', '/config/custom/config/TestBateria100Ah',
                            expected_status=[200, 404])
     
     # 8. Probar guardar múltiples configuraciones

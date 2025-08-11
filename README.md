@@ -582,7 +582,7 @@ curl -X POST http://localhost:8000/config/custom/configurations/Batería%20Litio
   }'
 
 # Aplicar configuración guardada al ESP32
-curl -X POST http://localhost:8000/config/custom/configurations/Batería%20Litio%20100Ah/apply
+curl -X POST http://localhost:8000/config/custom/config/Batería%20Litio%20100Ah/apply
 
 # Exportar todas las configuraciones para backup
 curl http://localhost:8000/config/custom/configurations/export
@@ -626,10 +626,10 @@ curl -X POST http://localhost:8000/schedule/disable
 | `/schedule/info` | GET | Info sobre capacidades |
 | `/config/custom/configurations` | GET | Listar configuraciones guardadas |
 | `/config/custom/configurations` | POST | Guardar múltiples configuraciones |
-| `/config/custom/configurations/{name}` | POST | Guardar configuración individual |
-| `/config/custom/configurations/{name}` | GET | Obtener configuración específica |
-| `/config/custom/configurations/{name}` | DELETE | Eliminar configuración |
-| `/config/custom/configurations/{name}/apply` | POST | Aplicar configuración al ESP32 |
+| `/config/custom/config/{name}` | POST | Guardar configuración individual |
+| `/config/custom/config/{name}` | GET | Obtener configuración específica |
+| `/config/custom/config/{name}` | DELETE | Eliminar configuración |
+| `/config/custom/config/{name}/apply` | POST | Aplicar configuración al ESP32 |
 | `/config/custom/configurations/validate` | POST | Validar configuración |
 | `/config/custom/configurations/export` | GET | Exportar a JSON |
 | `/config/custom/configurations/import` | POST | Importar desde JSON |

@@ -13,9 +13,9 @@ API_BASE_URL = "http://192.168.13.253:8000"
 def test_create_configuration():
     """Probar creación de configuración según documentación"""
     
-    print("🧪 Probando POST /config/custom/configurations/{name}...")
+    print("🧪 Probando POST /config/custom/config/{name}...")
     
-    url = f"{API_BASE_URL}/config/custom/configurations/TestConfig"
+    url = f"{API_BASE_URL}/config/custom/config/TestConfig"
     
     # Datos según la documentación del frontend
     config_data = {

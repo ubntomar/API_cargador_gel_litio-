@@ -141,7 +141,7 @@ POST /config/parameter
 ### 📝 Crear Nueva Configuración
 
 ```http
-POST /config/custom/configurations/{name}
+POST /config/custom/config/{name}
 ```
 
 **Descripción:** Crea una nueva configuración personalizada
@@ -215,7 +215,7 @@ GET /config/custom/configurations?search=litio
 ### ⚡ Aplicar Configuración al ESP32
 
 ```http
-POST /config/custom/configurations/{name}/apply
+POST /config/custom/config/{name}/apply
 ```
 
 **Descripción:** Aplica una configuración guardada al ESP32
@@ -353,7 +353,7 @@ GET /config/custom/configurations/info
 ### 🗑️ Eliminar Configuración
 
 ```http
-DELETE /config/custom/configurations/{name}
+DELETE /config/custom/config/{name}
 ```
 
 **Descripción:** Elimina una configuración específica
@@ -524,7 +524,7 @@ const setParameter = async (parameter, value) => {
 ```javascript
 const applyConfiguration = async (configName) => {
   try {
-    const response = await fetch(`http://localhost:8000/config/custom/configurations/${configName}/apply`, {
+    const response = await fetch(`http://localhost:8000/config/custom/config/${configName}/apply`, {
       method: 'POST'
     });
     

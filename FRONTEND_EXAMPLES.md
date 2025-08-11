@@ -203,7 +203,7 @@ const ConfigurationManager = () => {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8000/config/custom/configurations/${configName}/apply`,
+        `http://localhost:8000/config/custom/config/${configName}/apply`,
         { method: 'POST' }
       );
       
