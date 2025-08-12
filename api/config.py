@@ -659,13 +659,10 @@ async def validate_configuration(configuration: CustomConfiguration):
     """
     try:
         logger.info("🔍 Validando configuración...")
-        
-        result = await custom_config_manager.validate_configuration(configuration.dict())
-        
-        logger.info(f"✅ Validación completada: {'exitosa' if result.is_valid else 'falló'}")
-        
+        # Pasar el objeto CustomConfiguration directamente
+        result = await custom_config_manager.validate_configuration(configuration)
+        logger.info(f"✅ Validación completada: {'exitosa' if result.get('status') == 'valid' else 'falló'}")
         return result
-        
     except Exception as e:
         logger.error(f"❌ Error validando configuración: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
