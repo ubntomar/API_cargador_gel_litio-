@@ -14,7 +14,7 @@ CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
-# Variable global para comando Docker Compose
+# Variable global para comando Docker Compose..
 DOCKER_COMPOSE_CMD=""
 
 print_header() {
