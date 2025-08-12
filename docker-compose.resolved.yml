@@ -1,0 +1,94 @@
+# =============================================================================
+# ESP32 Solar Charger API - Docker Compose RESUELTO automáticamente
+# =============================================================================
+# CPU_LIMIT: 8.0 | MEMORY_LIMIT: 1792m | WORKERS: 6
+# Arquitectura: x86_64 (16 CPUs)
+
+services:
+  esp32-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    image: esp32-solar-api:latest
+    container_name: esp32-solar-charger-api
+    
+    # 🔧 CONFIGURACIÓN DE PUERTO SERIAL DINÁMICO
+    devices:
+      - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"
+    
+    # Cargar variables desde archivo .env.resolved
+    env_file:
+      - .env.resolved
+    
+    # Puertos de red
+    ports:
+      - "8000:8000"
+    
+    # ✅ CONFIGURACIÓN MULTI-CPU RESUELTA
+    cpus: "8.0"
+    mem_limit: "1792m"
+    memswap_limit: "1792m"
+    
+    # Volúmenes para persistencia y desarrollo
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - .:/app/config:rw
+    
+    # Conectar a la red de servicios
+    networks:
+      - esp32-network
+    
+    # Dependencias de servicios
+    depends_on:
+      esp32-redis:
+        condition: service_healthy
+    
+    # Health check optimizado
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================================================
+  # REDIS SERVICE
+  # ============================================================================
+  esp32-redis:
+    image: redis:7-alpine
+    container_name: esp32-redis
+    
+    ports:
+      - "6379:6379"
+    
+    command: >
+      redis-server 
+      --appendonly yes 
+      --save 60 1000 
+      --maxmemory 256mb 
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+      --timeout 0
+    
+    volumes:
+      - redis-data:/data
+    
+    networks:
+      - esp32-network
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  esp32-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

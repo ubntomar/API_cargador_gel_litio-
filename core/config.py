@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # Timezone Configuration
     TZ: str = "America/Bogota"
     
+    # NUEVO: Multi-CPU Configuration
+    MAX_WORKERS: str = "auto"
+    CPU_LIMIT: str = "auto" 
+    MEMORY_LIMIT: str = "auto"
+    FORCE_SINGLE_WORKER: bool = False
+    
     class Config:
         env_file = ".env"
     

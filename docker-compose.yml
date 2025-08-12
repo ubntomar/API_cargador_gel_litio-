@@ -21,9 +21,9 @@ services:
     devices:
       - "${SERIAL_PORT:-/dev/ttyUSB0}:${SERIAL_PORT:-/dev/ttyUSB0}"  # Puerto desde .env,  /dev/ttyUSB0 fallback
     
-    # Cargar variables desde archivo .env
+    # Cargar variables desde archivo .env (resuelto automáticamente)
     env_file:
-      - .env
+      - .env.resolved
     
     # Puertos de red
     ports:
