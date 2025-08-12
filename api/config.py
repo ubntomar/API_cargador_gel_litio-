@@ -660,6 +660,7 @@ async def validate_configuration(configuration: CustomConfiguration):
     try:
         logger.info("🔍 Validando configuración...")
         result = await custom_config_manager.validate_configuration(configuration)
+        logger.debug(f"Resultado de validación: {result}")
         # Loguear usando el dict directamente
         logger.info(f"✅ Validación completada: {'exitosa' if result.get('is_valid') else 'falló'}")
         # Devolver el modelo Pydantic
