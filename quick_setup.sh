@@ -172,22 +172,22 @@ detect_cpu_configuration() {
 
 # Detectar puerto serial automáticamente
 detect_esp32_port() {
-    print_header "🔍 DETECCIÓN AUTOMÁTICA DE PUERTO ESP32"
+    print_header "🔍 DETECCIÓN AUTOMÁTICA DE PUERTO ESP32" >&2
     
-    echo "Buscando puertos seriales disponibles..."
-    echo ""
+    echo "Buscando puertos seriales disponibles..." >&2
+    echo "" >&2
     
     # Listar puertos disponibles
-    echo "📋 Puertos seriales encontrados:"
+    echo "📋 Puertos seriales encontrados:" >&2
     SERIAL_PORTS=$(ls /dev/tty{S,USB,ACM}* 2>/dev/null || true)
     
     if [ -z "$SERIAL_PORTS" ]; then
-        print_warning "No se encontraron puertos seriales"
-        echo "Asegúrate de que:"
-        echo "  • El ESP32 esté conectado"
-        echo "  • El cable USB funcione correctamente"
-        echo "  • Los drivers estén instalados"
-        echo ""
+        print_warning "No se encontraron puertos seriales" >&2
+        echo "Asegúrate de que:" >&2
+        echo "  • El ESP32 esté conectado" >&2
+        echo "  • El cable USB funcione correctamente" >&2
+        echo "  • Los drivers estén instalados" >&2
+        echo "" >&2
         return 1
     fi
     
@@ -196,13 +196,13 @@ detect_esp32_port() {
     declare -a PORT_ARRAY
     
     for PORT in $SERIAL_PORTS; do
-        echo "  $COUNTER) $PORT"
+        echo "  $COUNTER) $PORT" >&2
         
         # Obtener información adicional si está disponible
         if command -v udevadm &> /dev/null; then
             INFO=$(udevadm info --name="$PORT" 2>/dev/null | grep -E "ID_VENDOR|ID_MODEL|ID_SERIAL" | head -1 | cut -d= -f2 || echo "")
             if [ -n "$INFO" ]; then
-                echo "     └─ $INFO"
+                echo "     └─ $INFO" >&2
             fi
         fi
         
@@ -210,7 +210,7 @@ detect_esp32_port() {
         ((COUNTER++))
     done
     
-    echo ""
+    echo "" >&2
     
     # Autodetección inteligente
     ESP32_PORT=""
@@ -227,7 +227,7 @@ detect_esp32_port() {
                     # IDs comunes: 10c4 (Silicon Labs), 1a86 (QinHeng), 0403 (FTDI)
                     if echo "$VENDOR_INFO" | grep -qE "(10c4|1a86|0403)"; then
                         ESP32_PORT="$PORT"
-                        print_success "🎯 ESP32 detectado automáticamente en: $ESP32_PORT"
+                        print_success "🎯 ESP32 detectado automáticamente en: $ESP32_PORT" >&2
                         break
                     fi
                 fi
@@ -244,11 +244,11 @@ detect_esp32_port() {
     if [ -z "$ESP32_PORT" ]; then
         if [ -e "/dev/ttyS5" ]; then
             ESP32_PORT="/dev/ttyS5"
-            print_status "Usando puerto por defecto: $ESP32_PORT"
+            print_status "Usando puerto por defecto: $ESP32_PORT" >&2
         else
-            echo "No se pudo detectar el ESP32 automáticamente."
-            echo ""
-            echo "Selecciona el puerto manualmente:"
+            echo "No se pudo detectar el ESP32 automáticamente." >&2
+            echo "" >&2
+            echo "Selecciona el puerto manualmente:" >&2
             read -p "Número de puerto (1-$((COUNTER-1))) o ruta completa: " PORT_CHOICE
             
             if [[ "$PORT_CHOICE" =~ ^[0-9]+$ ]] && [ "$PORT_CHOICE" -ge 1 ] && [ "$PORT_CHOICE" -lt "$COUNTER" ]; then
@@ -256,7 +256,7 @@ detect_esp32_port() {
             elif [ -e "$PORT_CHOICE" ]; then
                 ESP32_PORT="$PORT_CHOICE"
             else
-                print_error "Puerto inválido: $PORT_CHOICE"
+                print_error "Puerto inválido: $PORT_CHOICE" >&2
                 return 1
             fi
         fi
@@ -264,18 +264,18 @@ detect_esp32_port() {
     
     # Verificar permisos del puerto
     if [ ! -r "$ESP32_PORT" ] || [ ! -w "$ESP32_PORT" ]; then
-        print_warning "Configurando permisos para $ESP32_PORT..."
+        print_warning "Configurando permisos para $ESP32_PORT..." >&2
         sudo chmod 666 "$ESP32_PORT" 2>/dev/null || true
         
         # Agregar al grupo dialout si no está
         if ! groups | grep -q dialout; then
-            print_status "Agregando usuario al grupo dialout..."
+            print_status "Agregando usuario al grupo dialout..." >&2
             sudo usermod -aG dialout $USER
-            print_warning "⚠️ Necesitarás reiniciar la sesión para aplicar permisos de grupo"
+            print_warning "⚠️ Necesitarás reiniciar la sesión para aplicar permisos de grupo" >&2
         fi
     fi
     
-    print_success "✅ Puerto ESP32 configurado: $ESP32_PORT"
+    print_success "✅ Puerto ESP32 configurado: $ESP32_PORT" >&2
     echo "$ESP32_PORT"
 }
 
@@ -396,12 +396,49 @@ configure_project() {
     # Crear archivo .env principal si no existe
     if [ ! -f ".env" ]; then
         print_status "Creando archivo .env..."
-        if [ -f ".env.docker" ]; then
+        if [ -f ".env.resolved" ]; then
+            # Usar el archivo .env.resolved como base y actualizar el puerto
+            cp .env.resolved .env
+            # Actualizar el puerto serial en .env
+            if grep -q "^SERIAL_PORT=" .env; then
+                sed -i "s|^SERIAL_PORT=.*|SERIAL_PORT=${ESP32_PORT}|" .env
+            else
+                echo "SERIAL_PORT=${ESP32_PORT}" >> .env
+            fi
+        elif [ -f ".env.docker" ]; then
             cp .env.docker .env
         else
-            echo "SERIAL_PORT=${ESP32_PORT}" > .env
+            # Crear .env básico
+            cat > .env << EOF
+# ESP32 Solar Charger API - Configuración
+DEBUG=false
+HOST=0.0.0.0
+PORT=8000
+SERIAL_PORT=${ESP32_PORT}
+SERIAL_BAUDRATE=9600
+SERIAL_TIMEOUT=3.0
+MAX_WORKERS=auto
+CPU_LIMIT=auto
+MEMORY_LIMIT=auto
+FORCE_SINGLE_WORKER=false
+REDIS_URL=redis://esp32-redis:6379
+MIN_COMMAND_INTERVAL=0.6
+MAX_REQUESTS_PER_MINUTE=60
+CACHE_TTL=2
+LOG_LEVEL=INFO
+TZ=America/Bogota
+EOF
         fi
         print_success "✅ .env creado"
+    else
+        # Actualizar puerto en .env existente
+        print_status "Actualizando puerto en .env existente..."
+        if grep -q "^SERIAL_PORT=" .env; then
+            sed -i "s|^SERIAL_PORT=.*|SERIAL_PORT=${ESP32_PORT}|" .env
+        else
+            echo "SERIAL_PORT=${ESP32_PORT}" >> .env
+        fi
+        print_success "✅ .env actualizado"
     fi
 }
 
@@ -466,8 +503,24 @@ setup_directory_permissions() {
         fi
     fi
     
-    # Asegurar permisos de escritura
-    chmod 755 logs data 2>/dev/null || true
+    # Asegurar permisos de escritura completos para contenedores Docker
+    print_status "🔧 Aplicando permisos de escritura (777) para contenedores..."
+    chmod 777 logs data 2>/dev/null || {
+        print_warning "⚠️ Se requieren permisos de administrador para cambiar permisos"
+        print_status "Ejecutando: sudo chmod 777 logs data"
+        sudo chmod 777 logs data || {
+            print_error "❌ No se pudieron configurar permisos de escritura"
+            print_warning "Ejecuta manualmente: sudo chmod 777 logs data"
+            return 1
+        }
+    }
+    
+    # Verificar que los permisos se aplicaron correctamente
+    if [ -w "logs" ] && [ -w "data" ]; then
+        print_success "✅ Permisos de escritura configurados correctamente"
+    else
+        print_warning "⚠️ Verificar permisos manualmente: ls -la logs/ data/"
+    fi
     
     print_success "✅ Configuración de permisos completada"
 }
