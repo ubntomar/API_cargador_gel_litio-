@@ -4,6 +4,8 @@ API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad d
 
 > ✅ **ESTADO ACTUAL - Agosto 2025:** API completamente funcional y validado. Sistema multi-CPU implementado con auto-detección de arquitectura. Compatible con x86, ARM y RISC-V.
 
+> 🔧 **RUTAS CORREGIDAS - Agosto 2025:** Documentación actualizada con rutas correctas de configuraciones personalizadas: `/config/custom/configurations`. Ver [`CORRECION_RUTAS_CONFIGURACIONES_AUGUST2025.md`](./CORRECION_RUTAS_CONFIGURACIONES_AUGUST2025.md)
+
 > 🏗️ **COMPATIBILIDAD UNIVERSAL:** Compatible con x86_64, ARM64, RISC-V y otras arquitecturas. Auto-detección de CPU y optimización automática de workers.
 
 > 📚 **PARA DESARROLLADORES FRONTEND:** Consulta [`FRONTEND_API_DOCUMENTATION.md`](./FRONTEND_API_DOCUMENTATION.md) para documentación completa de endpoints, ejemplos de código y mejores prácticas.
