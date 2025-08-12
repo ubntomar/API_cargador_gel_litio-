@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CPU Detection and Configuration Utilities
-Detección automática de CPU y configuración óptima para multi-arquitecturas
+Detección automática de CPU y configuración óptima para multi-arquitecturass
 """
 
 import os
