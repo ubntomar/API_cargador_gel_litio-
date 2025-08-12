@@ -14,6 +14,9 @@ CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
+# Variable global para comando Docker Compose
+DOCKER_COMPOSE_CMD=""
+
 print_header() {
     echo -e "${BLUE}════════════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${BLUE}🚀 $1${NC}"
@@ -36,6 +39,45 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Función para detectar comando Docker Compose compatible
+detect_docker_compose_command() {
+    print_header "🔍 DETECCIÓN AUTOMÁTICA DE DOCKER COMPOSE"
+    
+    # Verificar que Docker esté funcionando
+    if ! docker info > /dev/null 2>&1; then
+        print_error "Docker no está funcionando. Ejecuta: sudo systemctl start docker"
+        exit 1
+    fi
+    
+    print_status "Detectando sintaxis compatible de Docker Compose..."
+    
+    # Probar sintaxis moderna primero (docker compose)
+    if docker compose version > /dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker compose"
+        print_success "✅ Usando sintaxis moderna: docker compose"
+    # Probar sintaxis legacy (docker-compose)
+    elif command -v docker-compose > /dev/null 2>&1 && docker-compose --version > /dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+        print_success "✅ Usando sintaxis legacy: docker-compose"
+    else
+        print_error "❌ No se encontró Docker Compose funcional"
+        print_error "Instala Docker Compose con: sudo apt install docker-compose-plugin"
+        exit 1
+    fi
+    
+    # Verificar funcionamiento con comando de prueba
+    print_status "Verificando funcionamiento..."
+    if $DOCKER_COMPOSE_CMD version > /dev/null 2>&1; then
+        VERSION_OUTPUT=$($DOCKER_COMPOSE_CMD version 2>/dev/null | head -1)
+        print_success "✅ Docker Compose funcional: $VERSION_OUTPUT"
+    else
+        print_error "❌ Error verificando Docker Compose"
+        exit 1
+    fi
+    
+    echo ""
+}
+
 # Función de debugging para problemas comunes de Docker
 show_docker_debugging_help() {
     print_header "🐛 GUÍA DE DEBUGGING DOCKER"
@@ -47,7 +89,7 @@ show_docker_debugging_help() {
     echo "   • Problema: Docker usa código en caché"
     echo "   • Verificar: docker exec -it esp32-solar-api-web-1 cat /app/api/config.py | wc -l"
     echo "   • Comparar: wc -l api/config.py"
-    echo "   • Solución: docker-compose down && docker-compose up -d"
+    echo "   • Solución: $DOCKER_COMPOSE_CMD down && $DOCKER_COMPOSE_CMD up -d"
     echo ""
     
     echo -e "${CYAN}2. Código no se actualiza automáticamente:${NC}"
@@ -60,8 +102,8 @@ show_docker_debugging_help() {
     
     echo -e "${CYAN}3. Comandos útiles de debugging:${NC}"
     echo "   • Ver archivos en container: docker exec -it esp32-solar-api-web-1 ls -la /app"
-    echo "   • Ver logs: docker-compose logs -f web"
-    echo "   • Reiniciar limpio: docker-compose down && docker-compose up -d"
+    echo "   • Ver logs: $DOCKER_COMPOSE_CMD logs -f web"
+    echo "   • Reiniciar limpio: $DOCKER_COMPOSE_CMD down && $DOCKER_COMPOSE_CMD up -d"
     echo "   • Inspeccionar container: docker exec -it esp32-solar-api-web-1 /bin/bash"
     echo ""
     
@@ -624,20 +666,13 @@ build_and_start() {
     # Determinar archivo de compose a usar
     COMPOSE_FILE="docker-compose.yml"
 
-
     # Determinar el archivo de configuración a modificar
     if [ -f "docker-compose.resolved.yml" ]; then
         COMPOSE_FILE="docker-compose.resolved.yml"
         print_success "$ARCH_EMOJI Usando configuración auto-resuelta para $ARCH_TYPE"
-        print_status "� Workers: $OPTIMAL_WORKERS | CPU: $CPU_LIMIT | RAM: $MEMORY_LIMIT"
+        print_status "⚙️ Workers: $OPTIMAL_WORKERS | CPU: $CPU_LIMIT | RAM: $MEMORY_LIMIT"
     else
         print_warning "⚠️ Usando configuración estándar (sin auto-detección)"
-    fi
-    
-    # Verificar que Docker esté funcionando
-    if ! docker info > /dev/null 2>&1; then
-        print_error "Docker no está funcionando. Ejecuta: sudo systemctl start docker"
-        return 1
     fi
     
     print_status "🏗️ Construyendo imagen optimizada para $ARCH ($CPU_COUNT CPUs)..."
@@ -646,22 +681,22 @@ build_and_start() {
     case "$ARCH_TYPE" in
         "riscv")
             print_status "🍊 RISC-V detectado - construcción con timeouts extendidos"
-            docker compose -f "$COMPOSE_FILE" build --no-cache esp32-api || {
+            $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build --no-cache esp32-api || {
                 print_warning "Build falló, intentando método alternativo..."
                 docker build --tag esp32-solar-api:latest .
             }
             ;;
         "arm64"|"armv7")
             print_status "🍓 ARM detectado - construcción optimizada"
-            docker compose -f "$COMPOSE_FILE" build esp32-api
+            $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build esp32-api
             ;;
         "x86_64")
-            print_status "�️ x86_64 detectado - construcción nativa"
-            docker compose -f "$COMPOSE_FILE" build esp32-api
+            print_status "🖥️ x86_64 detectado - construcción nativa"
+            $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build esp32-api
             ;;
         *)
             print_warning "❓ Arquitectura desconocida, usando método estándar"
-            docker compose -f "$COMPOSE_FILE" build esp32-api
+            $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build esp32-api
             ;;
     esac
     
@@ -678,7 +713,7 @@ build_and_start() {
     # Configurar permisos de directorios antes de iniciar contenedores
     setup_directory_permissions
     
-    docker compose -f "$COMPOSE_FILE" up -d
+    $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d
     
     if [ $? -eq 0 ]; then
         print_success "✅ Servicios iniciados"
@@ -691,6 +726,7 @@ build_and_start() {
         print_status "   ⚡ CPU Limit: $CPU_LIMIT"
         print_status "   💾 Memory Limit: $MEMORY_LIMIT"
         print_status "   📁 Compose File: $COMPOSE_FILE"
+        print_status "   🐳 Docker Compose: $DOCKER_COMPOSE_CMD"
     else
         print_error "❌ Error iniciando servicios"
         return 1
@@ -723,13 +759,13 @@ verify_installation() {
     if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
         print_warning "⚠️ La API tardó más de lo esperado en responder"
         print_status "Verificando logs..."
-        docker-compose logs --tail=20 esp32-api
+        $DOCKER_COMPOSE_CMD logs --tail=20 esp32-api
         return 1
     fi
     
     # Mostrar estado
     print_status "Estado de contenedores:"
-    docker-compose ps
+    $DOCKER_COMPOSE_CMD ps
     
     echo ""
     print_status "Estado de la API:"
@@ -760,13 +796,14 @@ show_final_info() {
     fi
     
     print_success "✅ Puerto serial configurado: $ESP32_PORT"
+    print_success "✅ Docker Compose: $DOCKER_COMPOSE_CMD"
     
     echo ""
     echo -e "${CYAN}📋 COMANDOS ÚTILES:${NC}"
-    echo -e "${YELLOW}Ver logs:${NC}        docker-compose logs -f esp32-api"
-    echo -e "${YELLOW}Reiniciar:${NC}       docker-compose restart esp32-api"
-    echo -e "${YELLOW}Detener:${NC}         docker-compose down"
-    echo -e "${YELLOW}Estado:${NC}          docker-compose ps"
+    echo -e "${YELLOW}Ver logs:${NC}        $DOCKER_COMPOSE_CMD logs -f esp32-api"
+    echo -e "${YELLOW}Reiniciar:${NC}       $DOCKER_COMPOSE_CMD restart esp32-api"
+    echo -e "${YELLOW}Detener:${NC}         $DOCKER_COMPOSE_CMD down"
+    echo -e "${YELLOW}Estado:${NC}          $DOCKER_COMPOSE_CMD ps"
     echo -e "${YELLOW}Configurar puerto:${NC} ./quick_setup.sh"
     
     echo ""
@@ -784,7 +821,7 @@ show_final_info() {
     
     echo ""
     if [[ "$ARCH" == "riscv64" ]]; then
-        print_warning "💡 TIP RISC-V: Si hay problemas de rendimiento, considera usar 'docker-compose down && docker-compose up -d' para reiniciar"
+        print_warning "💡 TIP RISC-V: Si hay problemas de rendimiento, considera usar '$DOCKER_COMPOSE_CMD down && $DOCKER_COMPOSE_CMD up -d' para reiniciar"
     fi
     print_warning "💡 TIP: Guarda la IP $IP para acceso desde otros dispositivos"
 }
@@ -793,6 +830,8 @@ show_final_info() {
 main() {
     # Verificar si se solicitó ayuda de debugging
     if [ "$1" = "debug" ] || [ "$1" = "--debug" ] || [ "$1" = "help" ]; then
+        # Detectar comando Docker Compose antes de mostrar ayuda
+        detect_docker_compose_command
         show_docker_debugging_help
         exit 0
     fi
@@ -837,6 +876,9 @@ main() {
         print_error "Setup cancelado"
         exit 1
     fi
+    
+    # Detectar comando Docker Compose compatible PRIMERO
+    detect_docker_compose_command
     
     # Detectar puerto ESP32
     ESP32_PORT=$(detect_esp32_port)
