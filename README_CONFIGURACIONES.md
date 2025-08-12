@@ -370,6 +370,46 @@ curl -X GET "http://localhost:8000/config/custom/configurations"
 curl -X GET "http://localhost:8000/config/custom/config/Test%20Config"
 ```
 
+### 4. Comandos Docker para Testing
+
+**⚠️ IMPORTANTE:** Los comandos Docker varían según la arquitectura del sistema.
+
+#### **Arrancar API para Testing (Recomendado)**
+```bash
+# Método inteligente (detecta automáticamente la versión correcta)
+./start_smart.sh
+```
+
+#### **Detener API después del Testing (Recomendado)**
+```bash
+# Método inteligente (detecta automáticamente la versión correcta)
+./stop_api.sh
+```
+
+#### **Comandos Manuales Adaptativos**
+```bash
+# Arrancar - Funciona en todas las arquitecturas
+if command -v "docker compose" > /dev/null 2>&1; then
+    docker compose -f docker-compose.resolved.yml up -d
+else
+    docker-compose -f docker-compose.resolved.yml up -d
+fi
+
+# Detener - Funciona en todas las arquitecturas  
+if command -v "docker compose" > /dev/null 2>&1; then
+    docker compose -f docker-compose.resolved.yml down
+else
+    docker-compose -f docker-compose.resolved.yml down
+fi
+```
+
+#### **Por Arquitectura**
+- **x86_64 (PC)**: Generalmente `docker compose` (sin guión)
+- **ARM64 (Raspberry Pi/Orange Pi)**: Generalmente `docker-compose` (con guión)
+- **RISC-V**: Varía según distribución
+
+**📖 Para más detalles:** Ver [`DOCKER_COMMANDS_MULTI_ARCHITECTURE.md`](./DOCKER_COMMANDS_MULTI_ARCHITECTURE.md)
+
 ## 🔄 Flujo de Uso Típico
 
 ### 1. Crear Configuración

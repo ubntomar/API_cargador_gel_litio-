@@ -53,12 +53,32 @@ if command -v docker &> /dev/null; then
         PROCESSES_FOUND=true
     fi
     
-    # Verificar docker-compose
+    # Verificar docker-compose/docker compose
     if [ -f "docker-compose.yml" ] || [ -f "docker-compose.resolved.yml" ]; then
-        echo "🔧 Verificando docker-compose..."
-        if docker-compose ps 2>/dev/null | grep -q "Up"; then
-            docker-compose down && echo "✅ Docker Compose detenido"
-            PROCESSES_FOUND=true
+        echo "🔧 Verificando Docker Compose..."
+        
+        # Detectar qué versión de Docker Compose está disponible
+        COMPOSE_FILE="docker-compose.resolved.yml"
+        if [ ! -f "$COMPOSE_FILE" ]; then
+            COMPOSE_FILE="docker-compose.yml"
+        fi
+        
+        # Probar Docker Compose v2 primero
+        if command -v "docker compose" > /dev/null 2>&1; then
+            if docker compose -f "$COMPOSE_FILE" ps 2>/dev/null | grep -q "Up\|running"; then
+                echo "📦 Usando Docker Compose v2 (sin guión)"
+                docker compose -f "$COMPOSE_FILE" down && echo "✅ Docker Compose v2 detenido"
+                PROCESSES_FOUND=true
+            fi
+        # Fallback a Docker Compose v1
+        elif command -v "docker-compose" > /dev/null 2>&1; then
+            if docker-compose -f "$COMPOSE_FILE" ps 2>/dev/null | grep -q "Up"; then
+                echo "📦 Usando Docker Compose v1 (con guión)"
+                docker-compose -f "$COMPOSE_FILE" down && echo "✅ Docker Compose v1 detenido"
+                PROCESSES_FOUND=true
+            fi
+        else
+            echo "⚠️ Docker Compose no encontrado, deteniendo contenedores directamente"
         fi
     fi
 fi

@@ -110,13 +110,27 @@ docker compose up -d --build
 
 #### **Para Nuevas Instalaciones:**
 ```bash
-# Después de git clone o git pull
-docker compose down
-docker compose up -d --build
+# Método recomendado (detecta automáticamente la versión Docker)
+./stop_api.sh
+./start_smart.sh
+
+# Método manual adaptativo
+if command -v "docker compose" > /dev/null 2>&1; then
+    docker compose -f docker-compose.resolved.yml down
+    docker compose -f docker-compose.resolved.yml up -d --build
+else
+    docker-compose -f docker-compose.resolved.yml down
+    docker-compose -f docker-compose.resolved.yml up -d --build
+fi
 
 # Si persisten problemas (rebuild completo)
-docker compose build --no-cache
-docker compose up -d
+if command -v "docker compose" > /dev/null 2>&1; then
+    docker compose -f docker-compose.resolved.yml build --no-cache
+    docker compose -f docker-compose.resolved.yml up -d
+else
+    docker-compose -f docker-compose.resolved.yml build --no-cache
+    docker-compose -f docker-compose.resolved.yml up -d
+fi
 ```
 
 ### **Debugging de Endpoints**

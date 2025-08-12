@@ -49,8 +49,15 @@ docker-compose up -d
 # Verificar persistencia
 ./validate_persistence.sh
 
-# Reiniciar (configuraciones se mantienen)
-docker-compose down && docker-compose up -d
+# Reiniciar (configuraciones se mantienen) - Método recomendado
+./stop_api.sh && ./start_smart.sh
+
+# Método manual adaptativo
+if command -v "docker compose" > /dev/null 2>&1; then
+    docker compose -f docker-compose.resolved.yml down && docker compose -f docker-compose.resolved.yml up -d
+else
+    docker-compose -f docker-compose.resolved.yml down && docker-compose -f docker-compose.resolved.yml up -d
+fi
 ```
 
 ### **Verificar Estado**

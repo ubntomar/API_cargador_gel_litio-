@@ -341,13 +341,22 @@ volumes:
 **Para aplicar cambios después de git pull:**
 
 ```bash
-# 1. Detener contenedores
-docker compose down
+# 1. Detener contenedores (método recomendado)
+./stop_api.sh
 
-# 2. Recrear con código actualizado (forzar rebuild si es necesario)
-docker compose up -d --build
+# 2. Recrear con código actualizado
+./start_smart.sh
 
-# 3. Si persisten problemas, rebuild completo:
+# 3. Método manual adaptativo:
+if command -v "docker compose" > /dev/null 2>&1; then
+    docker compose -f docker-compose.resolved.yml down
+    docker compose -f docker-compose.resolved.yml up -d --build
+else
+    docker-compose -f docker-compose.resolved.yml down
+    docker-compose -f docker-compose.resolved.yml up -d --build
+fi
+
+# 4. Si persisten problemas, rebuild completo:
 docker compose build --no-cache
 docker compose up -d
 ```
@@ -468,11 +477,20 @@ git pull origin main
 
 # 2. Los archivos Docker ya están en el directorio correcto
 
-# 3. Detener contenedores actuales
-docker-compose down
+# 3. Detener contenedores actuales (método recomendado)
+./stop_api.sh
 
-# 4. Reconstruir imagen con cambios
-docker-compose build --no-cache
+# 4. Reconstruir imagen con cambios (método recomendado)
+./start_smart.sh
+
+# Método manual alternativo:
+# if command -v "docker compose" > /dev/null 2>&1; then
+#     docker compose -f docker-compose.resolved.yml down
+#     docker compose -f docker-compose.resolved.yml build --no-cache
+# else
+#     docker-compose -f docker-compose.resolved.yml down
+#     docker-compose -f docker-compose.resolved.yml build --no-cache
+# fi
 
 # 5. Levantar contenedores actualizados
 docker-compose up -d
