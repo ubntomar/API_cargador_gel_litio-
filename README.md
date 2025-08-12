@@ -62,6 +62,24 @@ cd API_cargador_gel_litio-
 ./quick_setup.sh
 ```
 
+> ✅ **PERMISOS AUTOMÁTICOS**: El script `quick_setup.sh` configura automáticamente los permisos de los directorios `logs/` y `data/` para que el contenedor Docker pueda escribir correctamente. Si requiere permisos de administrador, te lo solicitará.
+
+### 🔧 **Configuración Manual de Permisos** (Solo si es necesario)
+
+Si experimentas problemas de permisos con los logs o datos:
+
+```bash
+# Verificar propietario de directorios
+ls -la logs/ data/
+
+# Corregir permisos si es necesario
+sudo chown -R $(id -u):$(id -g) logs data
+chmod 755 logs data
+
+# Verificar que los contenedores puedan escribir
+docker compose -f docker-compose.resolved.yml restart
+```
+
 ### 💻 **Instalación Manual por Arquitectura**
 
 #### 🖥️ **x86_64 / AMD64** (PC estándar)
@@ -857,6 +875,50 @@ API_cargador_gel_litio-/
 ## 🚨 Solución de Problemas
 
 ### Problemas Generales
+
+### 🔒 **Problemas de Permisos de Archivos**
+
+#### Error: Permission denied al escribir logs
+```bash
+# Síntoma: Error en logs del contenedor
+# PermissionError: [Errno 13] Permission denied: '/app/logs/esp32_api.log'
+
+# Solución 1: Usar script automático (Recomendado)
+./quick_setup.sh  # Configura permisos automáticamente
+
+# Solución 2: Manual
+sudo chown -R $(id -u):$(id -g) logs data
+chmod 755 logs data
+docker compose restart
+
+# Verificar permisos
+ls -la logs/ data/
+```
+
+#### Contenedor no arranca por permisos
+```bash
+# Verificar logs del contenedor
+docker compose logs esp32-api
+
+# Si hay errores de permisos:
+docker compose down
+sudo chown -R $(id -u):$(id -g) logs data configuraciones.json*
+docker compose up -d
+
+# Verificar estado
+docker compose ps
+curl http://localhost:8000/health
+```
+
+#### Datos no persisten entre reinicios
+```bash
+# Verificar montaje de volúmenes
+docker compose config | grep volumes -A 10
+
+# Verificar permisos de directorio data
+ls -la data/
+sudo chown -R $(id -u):$(id -g) data/
+```
 
 #### Schedule no funciona
 ```bash

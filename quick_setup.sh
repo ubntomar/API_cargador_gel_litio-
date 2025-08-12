@@ -324,53 +324,53 @@ configure_project() {
         fi
     fi
     
-    print_status "Configurando puerto serial: $ESP32_PORT..."
+    # Configurar puerto serial solo si el archivo docker-compose.yml existe
+    if [ -f "docker-compose.yml" ]; then
+        print_status "Configurando puerto serial: $ESP32_PORT..."
         
-        # Reemplazar puertos comunes uno por uno (método más seguro)
-        sed -i "s|/dev/ttyUSB[0-9]*|${ESP32_PORT}|g" docker-compose.yml
-        sed -i "s|/dev/ttyACM[0-9]*|${ESP32_PORT}|g" docker-compose.yml
-        sed -i "s|/dev/ttyS[0-9]*|${ESP32_PORT}|g" docker-compose.yml
+        # Método simple y directo usando pipe para evitar problemas de escape
+        TEMP_FILE=$(mktemp)
+        cp docker-compose.yml "$TEMP_FILE"
         
-        # Reemplazar device mappings específicos (sin regex complejos)
-        sed -i "s|/dev/ttyUSB0:/dev/ttyUSB0|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
-        sed -i "s|/dev/ttyACM0:/dev/ttyACM0|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
-        sed -i "s|/dev/ttyS5:/dev/ttyS5|${ESP32_PORT}:${ESP32_PORT}|g" docker-compose.yml
-        
-        # Reemplazar SERIAL_PORT en variables de ambiente
-        sed -i "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=${ESP32_PORT}|g" docker-compose.yml
+        # Reemplazar puertos usando métodos más seguros
+        if command -v perl >/dev/null 2>&1; then
+            # Usar perl para mejor manejo de caracteres especiales
+            perl -pi -e "s|/dev/ttyUSB[0-9]*|$ESP32_PORT|g" docker-compose.yml
+            perl -pi -e "s|/dev/ttyACM[0-9]*|$ESP32_PORT|g" docker-compose.yml
+            perl -pi -e "s|/dev/ttyS[0-9]*|$ESP32_PORT|g" docker-compose.yml
+            perl -pi -e "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
+        else
+            # Usar sed con delimitador seguro y escape básico
+            sed -i "s|/dev/ttyUSB0|$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|/dev/ttyUSB1|$ESP32_PORT|g" docker-compose.yml  
+            sed -i "s|/dev/ttyACM0|$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|/dev/ttyACM1|$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|/dev/ttyS5|$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|/dev/ttyS0|$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|SERIAL_PORT=/dev/ttyUSB0|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|SERIAL_PORT=/dev/ttyACM0|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|SERIAL_PORT=/dev/ttyS5|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
+        fi
         
         # Verificar que los cambios se aplicaron
-        if grep -q "${ESP32_PORT}" docker-compose.yml; then
-            print_success "✅ docker-compose.yml configurado correctamente con ${ESP32_PORT}"
+        if grep -q "$ESP32_PORT" docker-compose.yml; then
+            print_success "✅ docker-compose.yml configurado correctamente con $ESP32_PORT"
+            rm -f "$TEMP_FILE"
         else
-            print_warning "⚠️ Aplicando configuración alternativa más robusta..."
+            print_warning "⚠️ Restaurando archivo original y usando configuración manual..."
+            cp "$TEMP_FILE" docker-compose.yml
+            rm -f "$TEMP_FILE"
             
-            # Método más simple y seguro para reemplazar puertos
-            cp docker-compose.yml.backup docker-compose.yml
-            
-            # Reemplazar uno por uno para evitar problemas de regex
-            sed -i "s|/dev/ttyUSB0|${ESP32_PORT}|g" docker-compose.yml
-            sed -i "s|/dev/ttyUSB1|${ESP32_PORT}|g" docker-compose.yml  
-            sed -i "s|/dev/ttyACM0|${ESP32_PORT}|g" docker-compose.yml
-            sed -i "s|/dev/ttyACM1|${ESP32_PORT}|g" docker-compose.yml
-            sed -i "s|/dev/ttyS5|${ESP32_PORT}|g" docker-compose.yml
-            sed -i "s|/dev/ttyS0|${ESP32_PORT}|g" docker-compose.yml
-            
-            # Verificar nuevamente
-            if grep -q "${ESP32_PORT}" docker-compose.yml; then
-                print_success "✅ Configuración aplicada con método alternativo"
-            else
-                print_error "❌ No se pudo configurar el puerto automáticamente"
-                print_status "Será necesario editar manualmente docker-compose.yml"
-                print_status "Cambia todas las referencias de puertos serial a: ${ESP32_PORT}"
-                echo ""
-                print_status "Puedes continuar y editar el archivo después, o cancelar con Ctrl+C"
-                read -p "¿Continuar de todos modos? (y/N): " -n 1 -r
-                echo
-                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                    print_error "Setup cancelado"
-                    exit 1
-                fi
+            print_error "❌ No se pudo configurar el puerto automáticamente"
+            print_status "Será necesario editar manualmente docker-compose.yml"
+            print_status "Cambia todas las referencias de puertos serial a: $ESP32_PORT"
+            echo ""
+            print_status "Puedes continuar y editar el archivo después, o cancelar con Ctrl+C"
+            read -p "¿Continuar de todos modos? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                print_error "Setup cancelado"
+                exit 1
             fi
         fi
     else
@@ -381,7 +381,10 @@ configure_project() {
     # Actualizar .env.docker (crear si no existe)
     if [ -f ".env.docker" ]; then
         cp .env.docker .env.docker.backup
-        sed -i "s#SERIAL_PORT=.*#SERIAL_PORT=${ESP32_PORT}#g" .env.docker
+        # Usar un método más seguro para el reemplazo
+        grep -v "^SERIAL_PORT=" .env.docker > .env.docker.tmp || true
+        echo "SERIAL_PORT=${ESP32_PORT}" >> .env.docker.tmp
+        mv .env.docker.tmp .env.docker
         print_success "✅ .env.docker actualizado"
     else
         # Crear .env.docker desde docker-compose.yml environment
@@ -400,6 +403,73 @@ configure_project() {
         fi
         print_success "✅ .env creado"
     fi
+}
+
+# Configurar permisos de directorios para contenedores
+setup_directory_permissions() {
+    print_header "🔧 CONFIGURANDO PERMISOS DE DIRECTORIOS"
+    
+    # Crear directorios si no existen
+    print_status "📁 Creando directorios necesarios..."
+    mkdir -p logs data
+    
+    # Obtener el ID del usuario actual
+    CURRENT_USER_ID=$(id -u)
+    CURRENT_GROUP_ID=$(id -g)
+    
+    print_status "👤 Usuario actual: ID $CURRENT_USER_ID:$CURRENT_GROUP_ID"
+    
+    # Verificar si los directorios tienen permisos correctos
+    if [ -d "logs" ]; then
+        LOGS_OWNER=$(stat -c '%u:%g' logs)
+        if [ "$LOGS_OWNER" != "$CURRENT_USER_ID:$CURRENT_GROUP_ID" ]; then
+            print_status "🔧 Corrigiendo permisos del directorio logs..."
+            if sudo -n true 2>/dev/null; then
+                # Si tenemos sudo sin contraseña
+                sudo chown -R "$CURRENT_USER_ID:$CURRENT_GROUP_ID" logs
+                print_success "✅ Permisos de logs corregidos con sudo"
+            else
+                print_warning "⚠️ Se requieren permisos de administrador para logs"
+                echo "Ejecutando: sudo chown -R $CURRENT_USER_ID:$CURRENT_GROUP_ID logs"
+                sudo chown -R "$CURRENT_USER_ID:$CURRENT_GROUP_ID" logs
+                if [ $? -eq 0 ]; then
+                    print_success "✅ Permisos de logs corregidos"
+                else
+                    print_warning "⚠️ No se pudieron corregir permisos de logs, continuando..."
+                fi
+            fi
+        else
+            print_success "✅ Permisos de logs ya son correctos"
+        fi
+    fi
+    
+    if [ -d "data" ]; then
+        DATA_OWNER=$(stat -c '%u:%g' data)
+        if [ "$DATA_OWNER" != "$CURRENT_USER_ID:$CURRENT_GROUP_ID" ]; then
+            print_status "🔧 Corrigiendo permisos del directorio data..."
+            if sudo -n true 2>/dev/null; then
+                # Si tenemos sudo sin contraseña
+                sudo chown -R "$CURRENT_USER_ID:$CURRENT_GROUP_ID" data
+                print_success "✅ Permisos de data corregidos con sudo"
+            else
+                print_warning "⚠️ Se requieren permisos de administrador para data"
+                echo "Ejecutando: sudo chown -R $CURRENT_USER_ID:$CURRENT_GROUP_ID data"
+                sudo chown -R "$CURRENT_USER_ID:$CURRENT_GROUP_ID" data
+                if [ $? -eq 0 ]; then
+                    print_success "✅ Permisos de data corregidos"
+                else
+                    print_warning "⚠️ No se pudieron corregir permisos de data, continuando..."
+                fi
+            fi
+        else
+            print_success "✅ Permisos de data ya son correctos"
+        fi
+    fi
+    
+    # Asegurar permisos de escritura
+    chmod 755 logs data 2>/dev/null || true
+    
+    print_success "✅ Configuración de permisos completada"
 }
 
 # Verificar y construir imagen
@@ -460,6 +530,9 @@ build_and_start() {
     
     # Iniciar servicios
     print_status "🚀 Iniciando servicios con configuración multi-CPU..."
+    
+    # Configurar permisos de directorios antes de iniciar contenedores
+    setup_directory_permissions
     
     docker compose -f "$COMPOSE_FILE" up -d
     
