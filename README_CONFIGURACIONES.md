@@ -43,11 +43,11 @@ Incluye:
 
 ## 📚 Endpoints Disponibles
 
-### Base URL: `/config/configurations`
+### Base URL: `/config/custom/configurations`
 
 #### 1. Guardar Configuraciones Múltiples
 ```http
-POST /config/configurations
+POST /config/custom/configurations
 ```
 
 **Request Body:**
@@ -67,7 +67,7 @@ POST /config/configurations
 
 #### 2. Cargar Todas las Configuraciones
 ```http
-GET /config/configurations
+GET /config/custom/configurations
 ```
 
 **Response:**
@@ -95,7 +95,7 @@ GET /config/configurations
 
 #### 3. Guardar/Actualizar Configuración Individual
 ```http
-POST /config/configurations/{configuration_name}
+POST /config/custom/config/{configuration_name}
 ```
 
 **Request Body:**
@@ -125,7 +125,7 @@ POST /config/configurations/{configuration_name}
 
 #### 4. Obtener Configuración Específica
 ```http
-GET /config/configurations/{configuration_name}
+GET /config/custom/config/{configuration_name}
 ```
 
 **Response:**
@@ -151,7 +151,7 @@ GET /config/configurations/{configuration_name}
 
 #### 5. Eliminar Configuración
 ```http
-DELETE /config/configurations/{configuration_name}
+DELETE /config/custom/config/{configuration_name}
 ```
 
 **Response:**
@@ -165,7 +165,7 @@ DELETE /config/configurations/{configuration_name}
 
 #### 6. Aplicar Configuración al ESP32
 ```http
-POST /config/configurations/{configuration_name}/apply
+POST /config/custom/config/{configuration_name}/apply
 ```
 
 **Response:**
@@ -179,7 +179,7 @@ POST /config/configurations/{configuration_name}/apply
 
 #### 7. Validar Configuración
 ```http
-POST /config/configurations/validate
+POST /config/custom/configurations/validate
 ```
 
 **Request Body:**
@@ -209,7 +209,7 @@ POST /config/configurations/validate
 
 #### 8. Exportar Configuraciones
 ```http
-GET /config/configurations/export
+GET /config/custom/configurations/export
 ```
 
 **Response:**
@@ -223,7 +223,7 @@ GET /config/configurations/export
 
 #### 9. Importar Configuraciones
 ```http
-POST /config/configurations/import
+POST /config/custom/configurations/import
 ```
 
 **Request Body:**
@@ -249,7 +249,7 @@ POST /config/configurations/import
 
 #### 10. Información del Sistema
 ```http
-GET /config/configurations/info
+GET /config/custom/configurations/info
 ```
 
 **Response:**
@@ -359,15 +359,15 @@ python demo_configuraciones.py
 
 ```bash
 # Guardar configuración
-curl -X POST "http://localhost:8000/config/configurations" \
+curl -X POST "http://localhost:8000/config/custom/configurations" \
   -H "Content-Type: application/json" \
   -d '{"data": "{\"Test Config\":{\"batteryCapacity\":100,\"isLithium\":true,\"thresholdPercentage\":2.0,\"maxAllowedCurrent\":10000,\"bulkVoltage\":14.4,\"absorptionVoltage\":14.4,\"floatVoltage\":13.6,\"useFuenteDC\":false,\"fuenteDC_Amps\":0,\"factorDivider\":1}}"}'
 
 # Cargar configuraciones
-curl -X GET "http://localhost:8000/config/configurations"
+curl -X GET "http://localhost:8000/config/custom/configurations"
 
 # Obtener configuración específica
-curl -X GET "http://localhost:8000/config/configurations/Test%20Config"
+curl -X GET "http://localhost:8000/config/custom/config/Test%20Config"
 ```
 
 ## 🔄 Flujo de Uso Típico
@@ -467,7 +467,7 @@ curl -X GET "http://localhost:8000/config/configurations/Test%20Config"
 // Cargar configuraciones
 async function loadConfigurations() {
   try {
-    const response = await fetch('/config/configurations');
+    const response = await fetch('/config/custom/configurations');
     const data = await response.json();
     return data.configurations;
   } catch (error) {
@@ -479,7 +479,7 @@ async function loadConfigurations() {
 // Guardar configuración
 async function saveConfiguration(name, config) {
   try {
-    const response = await fetch(`/config/configurations/${name}`, {
+    const response = await fetch(`/config/custom/config/${name}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
@@ -494,7 +494,7 @@ async function saveConfiguration(name, config) {
 // Aplicar configuración
 async function applyConfiguration(name) {
   try {
-    const response = await fetch(`/config/configurations/${name}/apply`, {
+    const response = await fetch(`/config/custom/config/${name}/apply`, {
       method: 'POST'
     });
     return await response.json();
