@@ -250,6 +250,42 @@ detect_esp32_port() {
         else
             print_success "📱 Puerto USB único detectado: $ESP32_PORT" >&2
         fi
+    elif [ -n "$ESP32_CANDIDATE" ] && [ ${#USB_PORTS[@]} -gt 1 ]; then
+        # Múltiples puertos, hay un candidato ESP32 claro, pero SIEMPRE selección manual
+        echo "🔍 Se encontraron múltiples puertos USB:" >&2
+        echo "" >&2
+        for i in "${!USB_PORTS[@]}"; do
+            PORT="${USB_PORTS[$i]}"
+            echo "  $((i+1))) $PORT" >&2
+            if command -v udevadm &> /dev/null; then
+                VENDOR_INFO=$(udevadm info --name="$PORT" 2>/dev/null | grep -E "ID_VENDOR|ID_MODEL|ID_SERIAL" | head -1 | cut -d= -f2 || echo "")
+                if [ -n "$VENDOR_INFO" ]; then
+                    echo "     └─ $VENDOR_INFO" >&2
+                fi
+                VENDOR_ID=$(udevadm info --name="$PORT" 2>/dev/null | grep -i "ID_VENDOR_ID" | cut -d= -f2 || echo "")
+                if echo "$VENDOR_ID" | grep -qE "(10c4|1a86|0403)"; then
+                    echo "     └─ ⭐ Recomendado ESP32 (Vendor ID: $VENDOR_ID)" >&2
+                else
+                    echo "     └─ 📟 Otro dispositivo (Vendor ID: $VENDOR_ID)" >&2
+                fi
+            fi
+        done
+        echo "" >&2
+        if [ -n "$ESP32_CANDIDATE" ]; then
+            echo "💡 Recomendado: $ESP32_CANDIDATE (detectado como ESP32)" >&2
+            echo "" >&2
+        fi
+        # SIEMPRE selección manual
+        while true; do
+            read -p "Selecciona el puerto para ESP32 (1-${#USB_PORTS[@]}): " CHOICE >&2
+            if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "${#USB_PORTS[@]}" ]; then
+                ESP32_PORT="${USB_PORTS[$((CHOICE-1))]}"
+                print_success "✅ Puerto seleccionado: $ESP32_PORT" >&2
+                break
+            else
+                echo "❌ Selección inválida. Ingresa un número entre 1 y ${#USB_PORTS[@]}" >&2
+            fi
+        done
     else
         # Múltiples puertos USB, permitir selección
         echo "🔍 Se encontraron múltiples puertos USB:" >&2
