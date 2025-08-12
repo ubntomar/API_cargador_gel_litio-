@@ -20,11 +20,11 @@ Este proyecto está diseñado para funcionar automáticamente en **cualquier arq
 
 ```bash
 # 1. Clonar proyecto
-git clone <repo-url> esp32-solar-api
-cd esp32-solar-api
+git clone https://github.com/ubntomar/API_cargador_gel_litio-.git
+cd API_cargador_gel_litio-
 
 # 2. Ejecutar instalación automática
-./start_multicpu.sh
+./quick_setup.sh
 ```
 
 ### 🔧 **Método 2: Instalación Manual**
@@ -209,7 +209,7 @@ curl http://localhost:8000/
 ```bash
 # Solución: Forzar single worker
 export FORCE_SINGLE_WORKER=true
-./start_multicpu.sh
+./quick_setup.sh
 ```
 
 ### **❌ Problema: "Error de memoria en ARM"**
@@ -217,7 +217,7 @@ export FORCE_SINGLE_WORKER=true
 # Solución: Reducir memoria
 export MEMORY_LIMIT=512m
 export MAX_WORKERS=1
-./start_multicpu.sh
+./quick_setup.sh
 ```
 
 ### **❌ Problema: "Timeouts en RISC-V"**
@@ -225,7 +225,7 @@ export MAX_WORKERS=1
 # Solución: El sistema ya configura timeouts extendidos automáticamente
 # Si persiste, forzar single worker:
 export FORCE_SINGLE_WORKER=true
-./start_multicpu.sh
+./quick_setup.sh
 ```
 
 ### **❌ Problema: "Arquitectura no reconocida"**
@@ -235,7 +235,7 @@ uname -m  # Ver arquitectura
 export MAX_WORKERS=1
 export CPU_LIMIT=2.0
 export MEMORY_LIMIT=512m
-./start_multicpu.sh
+./quick_setup.sh
 ```
 
 ## 📊 **Métricas de Rendimiento**
@@ -260,6 +260,6 @@ export MEMORY_LIMIT=512m
 
 - 📄 [README.md](./README.md) - Documentación principal
 - 🐳 [DOCKER_DEBUGGING_GUIDE.md](./DOCKER_DEBUGGING_GUIDE.md) - Debugging Docker
-- 🔧 [start_multicpu.sh](./start_multicpu.sh) - Script de auto-instalación
+- 🔧 [quick_setup.sh](./quick_setup.sh) - Script de auto-instalación
 - 🐍 [resolve_docker_config.py](./resolve_docker_config.py) - Resolver configuración automática
 - ⚙️ [utils/cpu_detection.py](./utils/cpu_detection.py) - Lógica de detección de CPU

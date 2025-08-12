@@ -53,11 +53,11 @@ API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad d
 
 ```bash
 # 1. Clonar el proyecto
-git clone <tu-repo> esp32_api
-cd esp32_api
+git clone https://github.com/ubntomar/API_cargador_gel_litio-.git
+cd API_cargador_gel_litio-
 
 # 2. Ejecutar instalación automática (detecta tu arquitectura)
-./start_multicpu.sh
+./quick_setup.sh
 ```
 
 ### 💻 **Instalación Manual por Arquitectura**
@@ -77,7 +77,7 @@ python3 resolve_docker_config.py  # Auto-detecta configuración
 #### 🍓 **ARM64** (Raspberry Pi 4/5, Orange Pi)
 ```bash
 # Auto-detección y optimización para ARM
-./start_multicpu.sh
+./quick_setup.sh
 
 # O manual con Docker
 source venv/bin/activate
@@ -88,15 +88,14 @@ docker compose -f docker-compose.resolved.yml up --build
 #### 🏗️ **RISC-V** (Orange Pi R2S, VisionFive)
 ```bash
 # Optimización específica para RISC-V
-./start_multicpu.sh
+./quick_setup.sh
 
 # Configuración manual para RISC-V
 export MAX_WORKERS=auto
 export CPU_LIMIT=auto  
 export MEMORY_LIMIT=auto
-./start_multicpu.sh
+./quick_setup.sh
 ```
-cd esp32_api
 
 ### 🌐 **Configuración Universal de Variables**
 
@@ -724,7 +723,7 @@ python test_schedule_functionality.py
 ## 📁 Estructura del Proyecto
 
 ```
-esp32_api/
+API_cargador_gel_litio-/
 ├── main.py                    # FastAPI app principal
 ├── models/                    # Modelos Pydantic
 │   ├── esp32_data.py         # Modelos ESP32

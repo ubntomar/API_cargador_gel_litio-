@@ -511,8 +511,8 @@ EOF
 create_project_structure() {
     print_section "Configurando Estructura del Proyecto"
     
-    # NOTA: Ahora trabajamos directamente en el directorio raíz del proyecto
-    # No creamos carpeta esp32_api_docker/ separada
+    # NOTA: Trabajamos directamente en el directorio raíz del repositorio clonado
+    # El flujo actual es: git clone → cd API_cargador_gel_litio- → docker-compose up
     
     print_status "Creando estructura de directorios necesarios..."
     mkdir -p {scripts,config,logs,data,docs}
