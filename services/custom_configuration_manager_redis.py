@@ -276,34 +276,35 @@ class CustomConfigurationManagerRedis:
     async def validate_configuration(self, configuration: CustomConfiguration) -> Dict[str, Any]:
         """Validar configuración"""
         try:
-            # Validación básica con Pydantic (automática)
             config_dict = configuration.dict()
-            
-            # Validaciones adicionales
-            warnings = []
-            
+            warnings = {}
+            errors = None
+            is_valid = True
+
             # Validar voltajes
             if config_dict["bulkVoltage"] <= config_dict["floatVoltage"]:
-                warnings.append("Bulk voltage debería ser mayor que float voltage")
-            
+                warnings["bulkVoltage"] = "Bulk voltage debería ser mayor que float voltage"
+
             if config_dict["absorptionVoltage"] < config_dict["floatVoltage"]:
-                warnings.append("Absorption voltage debería ser mayor o igual que float voltage")
-            
+                warnings["absorptionVoltage"] = "Absorption voltage debería ser mayor o igual que float voltage"
+
             # Validar capacidad vs corriente
             if config_dict["maxAllowedCurrent"] > (config_dict["batteryCapacity"] * 1000):
-                warnings.append("Corriente máxima muy alta para la capacidad de batería")
-            
+                warnings["maxAllowedCurrent"] = "Corriente máxima muy alta para la capacidad de batería"
+
+            # Si hay errores de validación, poner is_valid en False y llenar errors
+            # (Aquí podrías agregar validaciones estrictas si lo deseas)
+
             return {
-                "status": "valid",
-                "warnings": warnings,
-                "validated_at": datetime.now().isoformat()
+                "is_valid": is_valid,
+                "errors": errors,
+                "warnings": warnings if warnings else None
             }
-            
         except Exception as e:
             return {
-                "status": "invalid",
-                "error": str(e),
-                "validated_at": datetime.now().isoformat()
+                "is_valid": False,
+                "errors": {"general": str(e)},
+                "warnings": None
             }
     
     async def get_system_info(self) -> Dict[str, Any]:
