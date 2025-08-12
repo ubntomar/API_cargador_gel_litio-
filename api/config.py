@@ -666,7 +666,7 @@ async def validate_configuration(configuration: CustomConfiguration):
         from models.custom_configurations import ConfigurationValidationResponse
         return ConfigurationValidationResponse(**result)
     except Exception as e:
-        logger.error(f"❌ Error validando configuración: {e}")
+        logger.error(f"❌ Error validando configuración !!!: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @router.get("/custom/configurations/export")
