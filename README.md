@@ -64,7 +64,53 @@ cd API_cargador_gel_litio-
 
 > ✅ **PERMISOS AUTOMÁTICOS**: El script `quick_setup.sh` configura automáticamente los permisos de los directorios `logs/` y `data/` para que el contenedor Docker pueda escribir correctamente. Si requiere permisos de administrador, te lo solicitará.
 
-### 🔧 **Configuración Manual de Permisos** (Solo si es necesario)
+### � **¿Cuándo usar qué archivo Docker Compose?**
+
+Este proyecto tiene **DOS archivos Docker Compose** con propósitos diferentes:
+
+#### 📄 **`docker-compose.yml`** - Configuración Básica
+```bash
+# Usar para desarrollo simple o primera instalación
+docker compose up --build
+docker compose down
+```
+- **Cuándo usar**: Primera vez instalando, desarrollo básico
+- **Características**: Configuración estándar, menos optimizada
+- **Límites**: Recursos genéricos, no optimizado por arquitectura
+
+#### ⚡ **`docker-compose.resolved.yml`** - Configuración Optimizada
+```bash
+# Usar para producción y mejor rendimiento
+docker compose -f docker-compose.resolved.yml up --build
+docker compose -f docker-compose.resolved.yml down
+```
+- **Cuándo usar**: SIEMPRE después de ejecutar `./quick_setup.sh` o `python3 resolve_docker_config.py`
+- **Características**: **Auto-optimizado para tu CPU/RAM específica**
+- **Límites**: Workers, CPU y memoria calculados automáticamente
+- **Rendimiento**: Hasta 3x mejor rendimiento en multi-CPU
+
+> 🎯 **RECOMENDACIÓN**: Usa SIEMPRE `docker-compose.resolved.yml` para mejor rendimiento. El script `quick_setup.sh` lo genera automáticamente detectando tu hardware.
+
+#### 🤔 **¿Por qué no usar solo `docker compose down`?**
+
+```bash
+# ❌ PROBLEMA: Si usas solo esto después de quick_setup.sh
+docker compose down              # Para el docker-compose.yml básico
+docker compose up               # Inicia la versión NO optimizada
+
+# ✅ CORRECTO: Especificar el archivo optimizado
+docker compose -f docker-compose.resolved.yml down    # Para la versión optimizada
+docker compose -f docker-compose.resolved.yml up      # Inicia la versión optimizada
+```
+
+#### 🚀 **Scripts Automáticos (Recomendado)**
+```bash
+# Usar los scripts incluidos para evitar confusión
+./stop_api.sh          # Para automáticamente (detecta cuál archivo usar)
+./start_smart.sh       # Inicia automáticamente (usa versión optimizada)
+```
+
+### �🔧 **Configuración Manual de Permisos** (Solo si es necesario)
 
 Si experimentas problemas de permisos con los logs o datos:
 
