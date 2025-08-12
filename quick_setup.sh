@@ -797,7 +797,7 @@ show_final_info() {
     
     print_success "✅ Puerto serial configurado: $ESP32_PORT"
     print_success "✅ Docker Compose: $DOCKER_COMPOSE_CMD"
-    
+
     echo ""
     echo -e "${CYAN}📋 COMANDOS ÚTILES:${NC}"
     echo -e "${YELLOW}Ver logs:${NC}        $DOCKER_COMPOSE_CMD logs -f esp32-api"
@@ -805,25 +805,46 @@ show_final_info() {
     echo -e "${YELLOW}Detener:${NC}         $DOCKER_COMPOSE_CMD down"
     echo -e "${YELLOW}Estado:${NC}          $DOCKER_COMPOSE_CMD ps"
     echo -e "${YELLOW}Configurar puerto:${NC} ./quick_setup.sh"
-    
+
     echo ""
     echo -e "${CYAN}🌐 ACCESO REMOTO:${NC}"
     IP=$(hostname -I | awk '{print $1}')
     echo -e "${YELLOW}API:${NC}             http://$IP:8000"
     echo -e "${YELLOW}Documentación:${NC}   http://$IP:8000/docs"
     echo -e "${YELLOW}Health Check:${NC}    http://$IP:8000/health"
-    
+
     echo ""
     echo -e "${CYAN}📱 EJEMPLO DE USO:${NC}"
     echo -e "${YELLOW}curl http://$IP:8000/data/${NC}"
     echo -e "${YELLOW}curl http://$IP:8000/health${NC}"
     echo -e "${YELLOW}curl http://$IP:8000/config${NC}"
-    
+
     echo ""
     if [[ "$ARCH" == "riscv64" ]]; then
         print_warning "💡 TIP RISC-V: Si hay problemas de rendimiento, considera usar '$DOCKER_COMPOSE_CMD down && $DOCKER_COMPOSE_CMD up -d' para reiniciar"
     fi
     print_warning "💡 TIP: Guarda la IP $IP para acceso desde otros dispositivos"
+
+    # Mini resumen de cómo levantar los servicios según el archivo de configuración detectado
+    echo ""
+    echo -e "${PURPLE}════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${PURPLE}📝 RESUMEN FINAL: Cómo levantar los servicios${NC}"
+    echo -e "${PURPLE}════════════════════════════════════════════════════════════════════════════${NC}"
+    if [ -f "docker-compose.resolved.yml" ]; then
+        echo -e "${CYAN}Se detectó configuración auto-resuelta:${NC}"
+        echo -e "${YELLOW}Levantar servicios:${NC}   $DOCKER_COMPOSE_CMD -f docker-compose.resolved.yml up -d"
+        echo -e "${YELLOW}Ver logs:${NC}            $DOCKER_COMPOSE_CMD -f docker-compose.resolved.yml logs -f esp32-api"
+        echo -e "${YELLOW}Detener:${NC}             $DOCKER_COMPOSE_CMD -f docker-compose.resolved.yml down"
+        echo -e "${YELLOW}Estado:${NC}              $DOCKER_COMPOSE_CMD -f docker-compose.resolved.yml ps"
+    else
+        echo -e "${CYAN}Se detectó configuración estándar:${NC}"
+        echo -e "${YELLOW}Levantar servicios:${NC}   $DOCKER_COMPOSE_CMD up -d"
+        echo -e "${YELLOW}Ver logs:${NC}            $DOCKER_COMPOSE_CMD logs -f esp32-api"
+        echo -e "${YELLOW}Detener:${NC}             $DOCKER_COMPOSE_CMD down"
+        echo -e "${YELLOW}Estado:${NC}              $DOCKER_COMPOSE_CMD ps"
+    fi
+    echo -e "${PURPLE}════════════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
 }
 
 # Función principal
