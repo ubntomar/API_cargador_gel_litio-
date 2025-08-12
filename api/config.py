@@ -658,7 +658,7 @@ async def validate_configuration(configuration: CustomConfiguration):
     Request body debe contener directamente los parámetros de configuración.
     """
     try:
-        logger.info("🔍 Validando configuración...")
+        logger.info("🔍 Validando configuración...!!")
         result = await custom_config_manager.validate_configuration(configuration)
         logger.debug(f"Resultado de validación: {result}")
         # Loguear usando el dict directamente
