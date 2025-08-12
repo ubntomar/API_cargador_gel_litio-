@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
-# ESP32 Solar Charger API - Instalación CORREGIDA para Orange Pi R2S RISC-V
-# Soluciona el problema de Docker en arquitectura RISC-V 64-bit
+# ESP32 Solar Charger API - Instalación Universal Multi-Arquitectura
+# Optimizado para Orange Pi R2S RISC-V, ARM y x86_64 con auto-detección
 # =============================================================================
 
 set -e
@@ -13,11 +13,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
+WHITE='\033[1;37m'
 NC='\033[0m'
 
 print_header() {
     echo -e "${PURPLE}═══════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${PURPLE}🍊 $1${NC}"
+    echo -e "${PURPLE}�️ $1${NC}"
     echo -e "${PURPLE}═══════════════════════════════════════════════════════════════════════════${NC}"
 }
 
@@ -42,25 +43,50 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Verificar plataforma RISC-V
-check_platform() {
-    print_section "Verificando Plataforma RISC-V"
+# Detección universal de arquitectura y CPU 
+detect_cpu_configuration() {
+    print_section "Detectando Configuración de CPU y Arquitectura"
     
     ARCH=$(uname -m)
-    print_status "Arquitectura detectada: $ARCH"
+    CPU_COUNT=$(nproc)
+    TOTAL_MEMORY_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    TOTAL_MEMORY_GB=$((TOTAL_MEMORY_KB / 1024 / 1024))
     
-    if [[ "$ARCH" != "riscv64" ]]; then
-        print_warning "⚠️ Este script está optimizado para RISC-V 64-bit"
-        print_warning "Arquitectura detectada: $ARCH"
-        read -p "¿Continuar de todos modos? (y/N): " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            print_error "Instalación cancelada"
-            exit 1
-        fi
+    print_status "Arquitectura detectada: $ARCH"
+    print_status "CPUs disponibles: $CPU_COUNT"
+    print_status "Memoria total: ${TOTAL_MEMORY_GB}GB"
+    
+    # Configuración automática basada en recursos disponibles
+    if [ "$CPU_COUNT" -ge 8 ]; then
+        OPTIMAL_WORKERS=6
+        print_status "CPU alta gama detectada (${CPU_COUNT} cores) → ${OPTIMAL_WORKERS} workers"
+    elif [ "$CPU_COUNT" -ge 4 ]; then
+        OPTIMAL_WORKERS=3
+        print_status "CPU media detectada (${CPU_COUNT} cores) → ${OPTIMAL_WORKERS} workers"
     else
-        print_success "✅ RISC-V 64-bit confirmado - Perfecto para Orange Pi R2S"
+        OPTIMAL_WORKERS=2
+        print_status "CPU básica detectada (${CPU_COUNT} cores) → ${OPTIMAL_WORKERS} workers"
     fi
+    
+    # Validación específica por arquitectura
+    case "$ARCH" in
+        "riscv64")
+            print_success "✅ RISC-V 64-bit detectado - Perfecto para Orange Pi R2S"
+            ARCHITECTURE_TYPE="RISC-V"
+            ;;
+        "aarch64"|"arm64")
+            print_success "✅ ARM 64-bit detectado - Compatible con múltiples SBCs"
+            ARCHITECTURE_TYPE="ARM64"
+            ;;
+        "x86_64"|"amd64")
+            print_success "✅ x86_64 detectado - Compatible con PC/Servidores"
+            ARCHITECTURE_TYPE="x86_64"
+            ;;
+        *)
+            print_warning "⚠️ Arquitectura $ARCH no completamente probada"
+            ARCHITECTURE_TYPE="OTHER"
+            ;;
+    esac
     
     # Verificar espacio disponible
     AVAILABLE_SPACE=$(df -BG / | awk 'NR==2 {print $4}' | sed 's/G//')
@@ -72,11 +98,17 @@ check_platform() {
     else
         print_success "✅ Espacio suficiente: ${AVAILABLE_SPACE}GB"
     fi
+    
+    # Exportar variables globales
+    export OPTIMAL_WORKERS
+    export ARCHITECTURE_TYPE
+    export CPU_COUNT
+    export TOTAL_MEMORY_GB
 }
 
-# Detectar distribución específica
+# Detectar distribución específica - ahora universal
 detect_os() {
-    print_section "Detectando Sistema Operativo"
+    print_section "Detectando Sistema Operativo - Soporte Universal"
     
     if [ -f /etc/os-release ]; then
         . /etc/os-release
@@ -91,24 +123,30 @@ detect_os() {
         exit 1
     fi
     
-    # Verificar compatibilidad específica para RISC-V
+    # Verificar compatibilidad universal
     case $OS in
         "ubuntu")
-            if [[ "$VERSION" < "22.04" ]]; then
-                print_warning "⚠️ Ubuntu $VERSION - Recomendado 22.04+ para mejor soporte RISC-V"
+            if [[ "$VERSION" < "20.04" ]]; then
+                print_warning "⚠️ Ubuntu $VERSION - Recomendado 20.04+ para mejor compatibilidad"
             else
-                print_success "✅ Ubuntu $VERSION compatible"
+                print_success "✅ Ubuntu $VERSION compatible con $ARCHITECTURE_TYPE"
             fi
             ;;
         "debian")
-            if [[ "$VERSION" < "11" ]]; then
-                print_warning "⚠️ Debian $VERSION - Recomendado 11+ para RISC-V"
+            if [[ "$VERSION" < "10" ]]; then
+                print_warning "⚠️ Debian $VERSION - Recomendado 10+ para compatibilidad"
             else
-                print_success "✅ Debian $VERSION compatible"
+                print_success "✅ Debian $VERSION compatible con $ARCHITECTURE_TYPE"
             fi
             ;;
+        "fedora"|"centos"|"rhel")
+            print_success "✅ Sistema Red Hat compatible con $ARCHITECTURE_TYPE"
+            ;;
+        "arch"|"manjaro")
+            print_success "✅ Sistema Arch compatible con $ARCHITECTURE_TYPE"
+            ;;
         *)
-            print_warning "⚠️ SO no probado: $OS - Intentando instalación genérica..."
+            print_warning "⚠️ SO no probado: $OS - Intentando instalación genérica para $ARCHITECTURE_TYPE..."
             ;;
     esac
 }
@@ -143,9 +181,9 @@ update_system() {
     print_success "✅ Sistema actualizado"
 }
 
-# Instalar Docker para RISC-V - MÉTODO CORREGIDO
-install_docker_riscv() {
-    print_section "Instalando Docker para RISC-V (Método Corregido)"
+# Instalación universal de Docker con soporte multi-arquitectura
+install_docker_universal() {
+    print_section "Instalando Docker - Soporte Universal Multi-Arquitectura"
     
     # Verificar si Docker ya está instalado
     if command -v docker &> /dev/null; then
@@ -154,62 +192,95 @@ install_docker_riscv() {
         
         # Verificar si funciona
         if sudo docker run --rm hello-world &> /dev/null; then
-            print_success "✅ Docker funciona correctamente"
+            print_success "✅ Docker funciona correctamente en $ARCHITECTURE_TYPE"
             return 0
         else
             print_warning "⚠️ Docker instalado pero no funciona, reinstalando..."
         fi
     fi
     
-    print_warning "🔧 Docker oficial no soporta RISC-V - Usando métodos alternativos"
+    print_status "� Instalando Docker para arquitectura $ARCHITECTURE_TYPE..."
     
-    # Método 1: Intentar instalar desde repositorios de la distribución
-    print_status "Método 1: Instalando desde repositorios de la distribución..."
+    # Estrategia específica por arquitectura
+    case "$ARCHITECTURE_TYPE" in
+        "RISC-V")
+            print_warning "🔧 RISC-V detectado - Usando métodos compatibles"
+            install_docker_riscv_method
+            ;;
+        "ARM64")
+            print_status "🔧 ARM64 detectado - Instalación estándar optimizada"
+            install_docker_standard_method
+            ;;
+        "x86_64")
+            print_status "🔧 x86_64 detectado - Instalación estándar"
+            install_docker_standard_method
+            ;;
+        *)
+            print_warning "🔧 Arquitectura $ARCH - Intentando instalación genérica"
+            install_docker_fallback_method
+            ;;
+    esac
+}
+
+# Método específico para RISC-V
+install_docker_riscv_method() {
+    print_status "Método RISC-V: Instalando desde repositorios de distribución..."
     
     case $OS in
-        "ubuntu")
-            # Ubuntu tiene docker.io en sus repositorios
+        "ubuntu"|"debian")
+            # Repositorios de distribución para RISC-V
             if sudo apt-get install -y -qq docker.io docker-compose; then
-                print_success "✅ Docker instalado desde repositorios Ubuntu"
+                print_success "✅ Docker instalado desde repositorios $OS para RISC-V"
                 DOCKER_INSTALLED=true
             else
-                print_warning "⚠️ Falló instalación desde repositorios Ubuntu"
-                DOCKER_INSTALLED=false
-            fi
-            ;;
-        "debian")
-            # Debian también tiene docker.io
-            if sudo apt-get install -y -qq docker.io docker-compose; then
-                print_success "✅ Docker instalado desde repositorios Debian"
-                DOCKER_INSTALLED=true
-            else
-                print_warning "⚠️ Falló instalación desde repositorios Debian"
-                DOCKER_INSTALLED=false
+                print_warning "⚠️ Falló instalación desde repositorios $OS"
+                install_docker_fallback_method
             fi
             ;;
         *)
-            print_status "Intentando instalación genérica..."
-            if sudo apt-get install -y -qq docker.io docker-compose; then
-                print_success "✅ Docker instalado desde repositorios genéricos"
-                DOCKER_INSTALLED=true
-            else
-                DOCKER_INSTALLED=false
-            fi
+            install_docker_fallback_method
             ;;
     esac
+}
+
+# Método estándar para ARM64 y x86_64
+install_docker_standard_method() {
+    print_status "Instalando Docker usando repositorio oficial..."
     
-    # Método 2: Si falla el método 1, compilar desde fuentes (simplificado)
-    if [ "$DOCKER_INSTALLED" = false ]; then
-        print_status "Método 2: Instalando Docker usando script de conveniencia..."
-        
-        # Docker tiene un script que a veces funciona en RISC-V
-        if curl -fsSL https://get.docker.com | sudo sh; then
-            print_success "✅ Docker instalado usando script de conveniencia"
+    # Agregar clave GPG oficial de Docker
+    curl -fsSL https://download.docker.com/linux/$OS/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    
+    # Agregar repositorio oficial
+    echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$OS $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    # Actualizar e instalar
+    sudo apt-get update -qq
+    if sudo apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin; then
+        print_success "✅ Docker instalado desde repositorio oficial para $ARCHITECTURE_TYPE"
+        DOCKER_INSTALLED=true
+    else
+        print_warning "⚠️ Falló instalación oficial, intentando método alternativo..."
+        install_docker_fallback_method
+    fi
+}
+
+# Método de respaldo universal
+install_docker_fallback_method() {
+    print_status "Método de respaldo: Script de conveniencia universal..."
+    
+    if curl -fsSL https://get.docker.com | sudo sh; then
+        print_success "✅ Docker instalado usando script de conveniencia"
+        DOCKER_INSTALLED=true
+    else
+        print_status "Último intento: Instalación desde repositorios genéricos..."
+        if sudo apt-get install -y -qq docker.io docker-compose; then
+            print_success "✅ Docker instalado desde repositorios genéricos"
             DOCKER_INSTALLED=true
         else
-            print_warning "⚠️ Script de conveniencia falló"
+            print_error "❌ No se pudo instalar Docker. Instalación manual requerida."
             DOCKER_INSTALLED=false
         fi
+    fi
     fi
     
     # Método 3: Instalar Podman como alternativa (compatible con Docker)
@@ -226,42 +297,44 @@ install_docker_riscv() {
             # Configurar socket de Podman para compatibilidad
             sudo systemctl enable --now podman.socket
             
-            print_success "✅ Podman configurado como reemplazo de Docker"
-            DOCKER_INSTALLED=true
-        else
-            print_error "❌ No se pudo instalar Docker ni Podman"
-            DOCKER_INSTALLED=false
-        fi
-    fi
     
     if [ "$DOCKER_INSTALLED" = false ]; then
-        print_error "❌ Falló la instalación de Docker/Podman"
-        print_error "Instalación manual requerida. Ver documentación."
+        print_error "❌ Falló la instalación de Docker"
+        print_error "Consulte la guía MULTI_ARCHITECTURE_GUIDE.md para instalación manual"
         exit 1
     fi
     
-    # Configurar permisos y servicios
-    print_status "Configurando Docker/Podman..."
+    # Configurar permisos y servicios universalmente
+    configure_docker_universal
+}
+
+# Configuración universal de Docker
+configure_docker_universal() {
+    print_status "Configurando Docker para $ARCHITECTURE_TYPE..."
     
-    # Agregar usuario al grupo docker (o podman)
-    sudo usermod -aG docker $USER 2>/dev/null || sudo usermod -aG podman $USER 2>/dev/null || true
+    # Agregar usuario al grupo docker
+    sudo usermod -aG docker $USER 2>/dev/null || true
     
-    # Habilitar servicio
-    sudo systemctl enable docker 2>/dev/null || sudo systemctl enable podman 2>/dev/null || true
-    sudo systemctl start docker 2>/dev/null || sudo systemctl start podman 2>/dev/null || true
+    # Habilitar y iniciar servicio
+    sudo systemctl enable docker 2>/dev/null || true
+    sudo systemctl start docker 2>/dev/null || true
     
-    # Probar instalación
+    # Verificar funcionamiento
     print_status "Probando instalación de Docker..."
     if sudo docker run --rm hello-world &> /dev/null; then
-        print_success "✅ Docker funciona correctamente en RISC-V"
+        print_success "✅ Docker funciona correctamente en $ARCHITECTURE_TYPE"
     else
         print_warning "⚠️ Docker instalado pero el test falló - Continuando..."
     fi
+    
+    # Mostrar información de Docker
+    DOCKER_VERSION=$(docker --version 2>/dev/null || echo "Docker version unknown")
+    print_status "Docker instalado: $DOCKER_VERSION"
 }
 
-# Instalar Docker Compose para RISC-V
-install_docker_compose() {
-    print_section "Instalando Docker Compose para RISC-V"
+# Instalar Docker Compose universal
+install_docker_compose_universal() {
+    print_section "Instalando Docker Compose - Universal"
     
     # Verificar si ya está instalado
     if command -v docker-compose &> /dev/null; then
@@ -270,63 +343,62 @@ install_docker_compose() {
         return 0
     fi
     
-    # Método 1: Desde repositorios
+    # Verificar plugin de Docker Compose
+    if sudo docker compose version &> /dev/null; then
+        print_success "✅ Docker Compose plugin disponible"
+        
+        # Crear alias para compatibilidad
+        echo '#!/bin/bash\ndocker compose "$@"' | sudo tee /usr/local/bin/docker-compose > /dev/null
+        sudo chmod +x /usr/local/bin/docker-compose
+        return 0
+    fi
+    
+    # Método 1: Desde repositorios (universal)
     if sudo apt-get install -y -qq docker-compose; then
         print_success "✅ Docker Compose instalado desde repositorios"
         return 0
     fi
     
-    # Método 2: Usando pip (más compatible con RISC-V)
+    # Método 2: Usando pip (más compatible multi-arquitectura)
     print_status "Instalando Docker Compose usando pip..."
     if sudo pip3 install docker-compose; then
         print_success "✅ Docker Compose instalado usando pip"
         return 0
     fi
     
-    # Método 3: Plugin de Docker (si está disponible)
-    print_status "Intentando instalar plugin de Docker Compose..."
-    if sudo docker compose version &> /dev/null; then
-        print_success "✅ Docker Compose plugin ya disponible"
-        
-        # Crear alias para compatibilidad
-        echo '#!/bin/bash\ndocker compose "$@"' | sudo tee /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
-        
-        return 0
-    fi
-    
     print_warning "⚠️ Docker Compose no disponible - Usaremos 'docker compose' en su lugar"
 }
 
-# Configurar emulación QEMU para x86_64
+# Configurar emulación multi-arquitectura (opcional para RISC-V)
 setup_emulation() {
-    print_section "Configurando Emulación x86_64 (QEMU)"
+    print_section "Configurando Emulación Multi-Arquitectura (Opcional)"
     
-    print_status "Instalando QEMU para emulación multi-arquitectura..."
+    if [ "$ARCHITECTURE_TYPE" != "RISC-V" ]; then
+        print_status "Emulación no necesaria para $ARCHITECTURE_TYPE"
+        return 0
+    fi
+    
+    print_status "Instalando QEMU para emulación multi-arquitectura en RISC-V..."
     sudo apt-get install -y -qq \
         qemu-user-static \
         binfmt-support \
-        qemu-system-x86
+        qemu-system-x86 \
+        qemu-system-arm
     
     # Configurar binfmt para emulación
-    print_status "Configurando binfmt para emulación x86_64..."
+    print_status "Configurando binfmt para emulación multi-arquitectura..."
     
     # Verificar si ya está configurado
     if [ -f /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
-        print_success "✅ Emulación x86_64 ya está configurada"
+        print_success "✅ Emulación multi-arquitectura ya está configurada"
     else
-        print_status "Activando emulación x86_64..."
+        print_status "Activando emulación multi-arquitectura..."
         
-        # Método 1: Usando Docker (recomendado)
-        if sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes; then
+        # Usando Docker para configurar emulación
+        if sudo docker run --rm --privileged multiarch/qemu-user-static --reset -p yes &> /dev/null; then
             print_success "✅ Emulación configurada usando Docker"
         else
-            # Método 2: Manual
-            print_status "Configuración manual de binfmt..."
-            sudo update-binfmts --install qemu-x86_64 /usr/bin/qemu-x86_64-static \
-                --magic '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x3e\x00' \
-                --mask '\xff\xff\xff\xff\xff\xfe\xfe\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff' \
-                --offset 0 --credential yes 2>/dev/null || true
+            print_warning "⚠️ No se pudo configurar emulación automática"
         fi
     fi
     
@@ -749,18 +821,19 @@ EOF
     print_success "✅ Scripts auxiliares creados"
 }
 
-# Función principal mejorada
+# Función principal universal
 main() {
-    print_header "ESP32 Solar Charger API - Instalación CORREGIDA para Orange Pi R2S"
+    print_header "ESP32 Solar Charger API - Instalación Universal Multi-Arquitectura"
     
-    echo -e "${CYAN}🔧 Este script CORRIGE problemas específicos de RISC-V:${NC}"
-    echo -e "${CYAN}• Instalación de Docker adaptada para RISC-V${NC}"
-    echo -e "${CYAN}• Configuración de emulación x86_64 robusta${NC}"
-    echo -e "${CYAN}• Scripts optimizados para Orange Pi R2S${NC}"
-    echo -e "${CYAN}• Detección automática de hardware RISC-V${NC}"
+    echo -e "${CYAN}🌟 Este script instala automáticamente en cualquier arquitectura:${NC}"
+    echo -e "${CYAN}• x86_64 (PC/Servidores tradicionales)${NC}"
+    echo -e "${CYAN}• ARM64 (Raspberry Pi, Orange Pi ARM)${NC}"
+    echo -e "${CYAN}• RISC-V (Orange Pi R2S y compatibles)${NC}"
+    echo -e "${CYAN}• Auto-detección de CPU y configuración optimizada${NC}"
+    echo -e "${CYAN}• Docker con estrategias específicas por arquitectura${NC}"
     echo ""
     
-    read -p "¿Continuar con la instalación corregida? (y/N): " -n 1 -r
+    read -p "¿Continuar con la instalación universal? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         print_error "Instalación cancelada"
@@ -770,85 +843,81 @@ main() {
     # Verificar permisos sudo
     if ! sudo -n true 2>/dev/null; then
         print_status "Este script necesita permisos sudo para:"
-        print_status "• Instalar Docker/Podman desde repositorios"
-        print_status "• Configurar emulación QEMU"
-        print_status "• Configurar permisos seriales"
+        print_status "• Instalar Docker desde repositorios oficiales"
+        print_status "• Configurar emulación multi-arquitectura (RISC-V)"
+        print_status "• Configurar permisos seriales universales"
         echo ""
         sudo -v
     fi
     
-    # Ejecutar instalación corregida
-    check_platform
+    # Ejecutar instalación universal
+    detect_cpu_configuration       # ← NUEVA DETECCIÓN AUTOMÁTICA
     detect_os
     update_system
-    install_docker_riscv           # ← MÉTODO CORREGIDO
-    install_docker_compose         # ← MÉTODO CORREGIDO
-    setup_emulation
+    install_docker_universal       # ← MÉTODO UNIVERSAL
+    install_docker_compose_universal # ← MÉTODO UNIVERSAL
+    setup_emulation                # ← EMULACIÓN CUANDO SEA NECESARIA
     setup_serial_permissions
     create_project_structure
     create_helper_scripts
     
-    print_header "🎉 INSTALACIÓN CORREGIDA COMPLETADA"
+    print_header "🎉 INSTALACIÓN UNIVERSAL COMPLETADA"
     
-    echo -e "${GREEN}✅ Docker/Podman instalado para RISC-V${NC}"
-    echo -e "${GREEN}✅ Emulación x86_64 configurada${NC}"
-    echo -e "${GREEN}✅ Permisos seriales configurados${NC}"
+    echo -e "${GREEN}✅ Arquitectura $ARCHITECTURE_TYPE detectada y configurada${NC}"
+    echo -e "${GREEN}✅ Docker instalado para $ARCHITECTURE_TYPE${NC}"
+    echo -e "${GREEN}✅ Configuración optimizada: $OPTIMAL_WORKERS workers${NC}"
+    echo -e "${GREEN}✅ Permisos seriales configurados universalmente${NC}"
     echo -e "${GREEN}✅ Proyecto listo en: $(pwd)${NC}"
     echo ""
     
-    # Verificar instalación
+    # Verificación final universal
     print_section "🔍 VERIFICACIÓN FINAL"
     
-    echo "🐳 Docker instalado:"
+    echo "�️ Sistema detectado:"
+    echo "   Arquitectura: $ARCHITECTURE_TYPE ($ARCH)"
+    echo "   CPUs: $CPU_COUNT cores → $OPTIMAL_WORKERS workers optimizados"
+    echo "   Memoria: ${TOTAL_MEMORY_GB}GB"
+    echo ""
+    
+    echo "�🐳 Docker instalado:"
     if command -v docker &> /dev/null; then
         docker --version
         echo "   Estado: $(systemctl is-active docker 2>/dev/null || echo 'Funcionando')"
     fi
     
-    if command -v podman &> /dev/null; then
-        echo "🐳 Podman instalado:"
-        podman --version
+    echo ""
+    if [ "$ARCHITECTURE_TYPE" = "RISC-V" ]; then
+        echo "🔧 Emulación multi-arquitectura:"
+        if [ -f /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
+            echo "   x86_64: ✅ Configurada para RISC-V"
+        else
+            echo "   x86_64: ⚠️ Se configurará automáticamente cuando sea necesaria"
+        fi
+        echo ""
     fi
     
-    echo ""
-    echo "🔧 Emulación:"
-    if [ -f /proc/sys/fs/binfmt_misc/qemu-x86_64 ]; then
-        echo "   x86_64: ✅ Configurada"
-    else
-        echo "   x86_64: ⚠️ No detectada (se configurará en el build)"
-    fi
-    
-    echo ""
-    print_section "🚀 PRÓXIMOS PASOS"
-    echo -e "${CYAN}1. Diagnosticar sistema:${NC}"
+    print_section "🚀 PRÓXIMOS PASOS UNIVERSALES"
+    echo -e "${CYAN}1. Diagnosticar sistema específico:${NC}"
     echo -e "   ${YELLOW}./scripts/diagnose_system.sh${NC}"
     echo ""
     echo -e "${CYAN}2. Detectar puerto ESP32:${NC}"
     echo -e "   ${YELLOW}./scripts/detect_serial_port.sh${NC}"
     echo ""
-    echo -e "${CYAN}3. Copiar archivos del proyecto:${NC}"
-    echo -e "   ${YELLOW}# Copiar main.py, models/, services/, api/, core/ aquí${NC}"
+    echo -e "${CYAN}3. Configurar proyecto automáticamente:${NC}"
+    echo -e "   ${YELLOW}./quick_setup.sh${NC}"
+    echo -e "   ${WHITE}(Auto-detectará $OPTIMAL_WORKERS workers para tu CPU)${NC}"
     echo ""
-    echo -e "${CYAN}4. Construir imagen:${NC}"
+    echo -e "${CYAN}4. O construcción manual específica:${NC}"
     echo -e "   ${YELLOW}./scripts/build.sh${NC}"
     echo ""
-    echo -e "${CYAN}5. Ejecutar quick setup:${NC}"
-    echo -e "   ${YELLOW}# (después de copiar archivos del proyecto)${NC}"
-    echo ""
     
-    print_warning "⚠️ IMPORTANTE:"
+    print_warning "⚠️ INFORMACIÓN IMPORTANTE:"
     print_warning "   • Reinicia la sesión para aplicar permisos: newgrp dialout"
-    print_warning "   • Copia los archivos del proyecto antes del siguiente paso"
-    print_warning "   • Si usas Podman, los comandos docker funcionarán automáticamente"
+    print_warning "   • La configuración está optimizada para $ARCHITECTURE_TYPE"
+    print_warning "   • Consulta MULTI_ARCHITECTURE_GUIDE.md para detalles específicos"
     
-    print_success "🎉 ¡Instalación corregida completada exitosamente!"
+    print_success "🎉 ¡Instalación universal completada para $ARCHITECTURE_TYPE!"
 }
-
-# Verificar que no se ejecute como root
-if [[ $EUID -eq 0 ]]; then
-   print_error "No ejecutes este script como root (usa sudo cuando sea necesario)"
-   exit 1
-fi
 
 # Ejecutar función principal
 main "$@"

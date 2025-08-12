@@ -283,27 +283,48 @@ detect_esp32_port() {
 configure_project() {
     local ESP32_PORT="$1"
     
-    print_header "⚙️ CONFIGURANDO PROYECTO"
+    print_header "⚙️ CONFIGURANDO PROYECTO MULTI-ARQUITECTURA"
     
-    print_status "Configurando docker-compose.yml..."
+    # Detectar configuración de CPU
+    detect_cpu_configuration
     
-    # NOTA IMPORTANTE: Para desarrollo con live-reload, el docker-compose.yml debe incluir
-    # volúmenes mapeados para que los cambios de código se reflejen inmediatamente.
-    # Si experimentas problemas donde el código no se actualiza, verifica:
-    # 1. Que existan volumes: ./api:/app/api, ./services:/app/services, etc.
-    # 2. Ejecuta 'docker exec -it <container> ls -la /app' para verificar archivos
-    # 3. Usa 'docker-compose down && docker-compose up -d' para reiniciar limpio
+    print_status "Generando configuración automática..."
     
-    # Actualizar docker-compose.yml
-    if [ -f "docker-compose.yml" ]; then
-        # Backup
-        cp docker-compose.yml docker-compose.yml.backup
+    # Resolver configuración multi-CPU
+    if [ -f "resolve_docker_config.py" ]; then
+        print_status "Ejecutando auto-detección de CPU..."
+        if command -v python3 >/dev/null 2>&1; then
+            # Verificar si ya hay un entorno virtual activo
+            if [ -n "$VIRTUAL_ENV" ]; then
+                python3 resolve_docker_config.py 2>/dev/null || print_warning "Auto-detección falló, usando configuración manual"
+            elif [ -d "venv" ]; then
+                source venv/bin/activate 2>/dev/null || true
+                python3 resolve_docker_config.py 2>/dev/null || print_warning "Auto-detección falló, usando configuración manual"
+            else
+                print_warning "Entorno virtual no encontrado, usando configuración manual"
+            fi
+        else
+            print_warning "Python3 no encontrado, usando configuración manual"
+        fi
+    fi
+    
+    # Configurar docker-compose según arquitectura
+    COMPOSE_FILE="docker-compose.yml"
+    
+    # Si existe el archivo resuelto, usarlo
+    if [ -f "docker-compose.resolved.yml" ]; then
+        COMPOSE_FILE="docker-compose.resolved.yml"
+        print_success "✅ Usando configuración auto-resuelta: $COMPOSE_FILE"
+    else
+        print_status "Configurando manualmente docker-compose.yml..."
         
-        # Método más específico: buscar líneas específicas y reemplazar
-        print_status "Actualizando configuración de dispositivos..."
-        
-        # Método más seguro: reemplazar puertos específicos directamente
-        print_status "Aplicando configuración de puerto..."
+        # Backup del archivo original
+        if [ -f "docker-compose.yml" ]; then
+            cp docker-compose.yml docker-compose.yml.backup
+        fi
+    fi
+    
+    print_status "Configurando puerto serial: $ESP32_PORT..."
         
         # Reemplazar puertos comunes uno por uno (método más seguro)
         sed -i "s|/dev/ttyUSB[0-9]*|${ESP32_PORT}|g" docker-compose.yml
@@ -383,11 +404,21 @@ configure_project() {
 
 # Verificar y construir imagen
 build_and_start() {
-    print_header "🏗️ CONSTRUYENDO Y INICIANDO SERVICIOS"
+    print_header "🏗️ CONSTRUYENDO Y INICIANDO SERVICIOS MULTI-CPU"
     
-    # Detectar arquitectura
+    # Detectar arquitectura y configuración
     ARCH=$(uname -m)
-    print_status "Arquitectura detectada: $ARCH"
+    CPU_COUNT=$(nproc)
+    
+    # Determinar archivo de compose a usar
+    COMPOSE_FILE="docker-compose.yml"
+    if [ -f "docker-compose.resolved.yml" ]; then
+        COMPOSE_FILE="docker-compose.resolved.yml"
+        print_success "$ARCH_EMOJI Usando configuración auto-resuelta para $ARCH_TYPE"
+        print_status "� Workers: $OPTIMAL_WORKERS | CPU: $CPU_LIMIT | RAM: $MEMORY_LIMIT"
+    else
+        print_warning "⚠️ Usando configuración estándar (sin auto-detección)"
+    fi
     
     # Verificar que Docker esté funcionando
     if ! docker info > /dev/null 2>&1; then
@@ -395,79 +426,58 @@ build_and_start() {
         return 1
     fi
     
-    # Estrategia de construcción según arquitectura
-    if [[ "$ARCH" == "riscv64" ]]; then
-        print_status "🔧 Configuración especial para RISC-V detectada"
-        print_status "Usando emulación x86_64 para máxima compatibilidad..."
-        
-        # Para RISC-V, usar buildx con emulación x86_64
-        if docker buildx version > /dev/null 2>&1; then
-            print_status "Configurando Docker buildx para emulación x86_64..."
-            
-            # Crear builder si no existe
-            if ! docker buildx ls | grep -q "esp32-builder"; then
-                print_status "Creando builder personalizado..."
-                docker buildx create --name esp32-builder --driver docker-container --use || true
-                docker buildx inspect --bootstrap || true
-            fi
-            
-            # Construir forzando plataforma x86_64
-            print_status "Construyendo imagen con emulación x86_64 (puede tardar más en RISC-V)..."
-            docker buildx build --platform linux/amd64 --tag esp32-solar-api:latest --load . || {
-                print_warning "Buildx falló, intentando método alternativo..."
+    print_status "🏗️ Construyendo imagen optimizada para $ARCH ($CPU_COUNT CPUs)..."
+    
+    # Construcción según arquitectura
+    case "$ARCH_TYPE" in
+        "riscv")
+            print_status "🍊 RISC-V detectado - construcción con timeouts extendidos"
+            docker compose -f "$COMPOSE_FILE" build --no-cache esp32-api || {
+                print_warning "Build falló, intentando método alternativo..."
                 docker build --tag esp32-solar-api:latest .
             }
-        else
-            print_warning "Buildx no disponible, usando build estándar..."
-            docker build --tag esp32-solar-api:latest .
-        fi
-        
-    elif [[ "$ARCH" == "x86_64" ]] || [[ "$ARCH" == "amd64" ]]; then
-        print_status "🚀 Arquitectura x86_64 detectada - construcción nativa"
-        docker build --tag esp32-solar-api:latest .
-        
-    elif [[ "$ARCH" == "aarch64" ]] || [[ "$ARCH" == "arm64" ]]; then
-        print_status "🍓 Arquitectura ARM64 detectada (Orange Pi/Raspberry Pi)"
-        
-        # Para ARM64, intentar buildx primero
-        if docker buildx version > /dev/null 2>&1; then
-            print_status "Usando buildx para mejor compatibilidad..."
-            
-            if ! docker buildx ls | grep -q "esp32-builder"; then
-                docker buildx create --name esp32-builder --driver docker-container --use || true
-                docker buildx inspect --bootstrap || true
-            fi
-            
-            # Construir para la plataforma nativa primero, x86_64 como fallback
-            docker buildx build --platform linux/arm64 --tag esp32-solar-api:latest --load . || {
-                print_warning "Build ARM64 falló, intentando emulación x86_64..."
-                docker buildx build --platform linux/amd64 --tag esp32-solar-api:latest --load .
-            }
-        else
-            docker build --tag esp32-solar-api:latest .
-        fi
-        
+            ;;
+        "arm64"|"armv7")
+            print_status "🍓 ARM detectado - construcción optimizada"
+            docker compose -f "$COMPOSE_FILE" build esp32-api
+            ;;
+        "x86_64")
+            print_status "�️ x86_64 detectado - construcción nativa"
+            docker compose -f "$COMPOSE_FILE" build esp32-api
+            ;;
+        *)
+            print_warning "❓ Arquitectura desconocida, usando método estándar"
+            docker compose -f "$COMPOSE_FILE" build esp32-api
+            ;;
+    esac
+    
+    if [ $? -eq 0 ]; then
+        print_success "✅ Imagen construida exitosamente"
     else
-        print_warning "⚠️ Arquitectura no reconocida: $ARCH"
-        print_status "Intentando construcción estándar..."
-        docker build --tag esp32-solar-api:latest .
+        print_error "❌ Error construyendo imagen"
+        return 1
     fi
     
-    print_success "✅ Imagen construida"
-    
     # Iniciar servicios
-    print_status "Iniciando servicios Docker..."
+    print_status "🚀 Iniciando servicios con configuración multi-CPU..."
     
-    # DEBUGGING: Si los cambios de código no se aplican después del docker-compose up:
-    # 1. Verifica que docker-compose.yml tenga volumes mapeados para desarrollo
-    # 2. Ejecuta: docker exec -it esp32-solar-api-web-1 cat /app/api/config.py | wc -l
-    # 3. Compara con: wc -l api/config.py (deben coincidir las líneas)
-    # 4. Si no coinciden, hay problema de caché/volúmenes
-    # 5. Solución: docker-compose down && docker-compose up -d
+    docker compose -f "$COMPOSE_FILE" up -d
     
-    docker-compose up -d
-    
-    print_success "✅ Servicios iniciados"
+    if [ $? -eq 0 ]; then
+        print_success "✅ Servicios iniciados"
+        
+        # Mostrar configuración aplicada
+        echo ""
+        print_status "📊 Configuración aplicada:"
+        print_status "   🏗️ Arquitectura: $ARCH_TYPE ($ARCH)"
+        print_status "   👥 Workers: $OPTIMAL_WORKERS"
+        print_status "   ⚡ CPU Limit: $CPU_LIMIT"
+        print_status "   💾 Memory Limit: $MEMORY_LIMIT"
+        print_status "   📁 Compose File: $COMPOSE_FILE"
+    else
+        print_error "❌ Error iniciando servicios"
+        return 1
+    fi
 }
 
 # Verificar que todo esté funcionando
@@ -570,14 +580,15 @@ main() {
         exit 0
     fi
     
-    print_header "ESP32 API - SETUP RÁPIDO MULTIPLATAFORMA"
+    print_header "ESP32 API - SETUP UNIVERSAL MULTI-ARQUITECTURA"
     
-    echo -e "${CYAN}Este script hará automáticamente:${NC}"
-    echo -e "${CYAN}• Detectar el puerto del ESP32${NC}"
-    echo -e "${CYAN}• Configurar archivos Docker${NC}"
-    echo -e "${CYAN}• Construir imagen optimizada para tu arquitectura${NC}"
-    echo -e "${CYAN}• Iniciar todos los servicios${NC}"
-    echo -e "${CYAN}• Verificar que todo funcione${NC}"
+    echo -e "${CYAN}🚀 Este script detecta automáticamente tu hardware y optimiza:${NC}"
+    echo -e "${PURPLE}• 🔍 Arquitectura del sistema (x86, ARM, RISC-V)${NC}"
+    echo -e "${PURPLE}• ⚡ Número óptimo de workers según CPUs disponibles${NC}"
+    echo -e "${PURPLE}• 💾 Límites de memoria según configuración${NC}"
+    echo -e "${PURPLE}• 🔧 Timeouts específicos por arquitectura${NC}"
+    echo -e "${PURPLE}• 📡 Puerto del ESP32 automáticamente${NC}"
+    echo -e "${PURPLE}• 🐳 Docker Compose optimizado${NC}"
     echo ""
     echo -e "${YELLOW}💡 TIP: Ejecuta 'bash quick_setup.sh debug' para ver guía de debugging Docker${NC}"
     echo ""
