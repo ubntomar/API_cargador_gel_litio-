@@ -414,45 +414,43 @@ configure_project() {
         fi
     fi
     
-    # Configurar puerto serial solo si el archivo docker-compose.yml existe
-    if [ -f "docker-compose.yml" ]; then
-        print_status "Configurando puerto serial: $ESP32_PORT..."
-        
-        # Método simple y directo usando pipe para evitar problemas de escape
+
+    # Configurar puerto serial solo si el archivo de configuración principal existe
+    if [ -f "$COMPOSE_FILE" ]; then
+        print_status "Configurando puerto serial: $ESP32_PORT en $COMPOSE_FILE..."
+
         TEMP_FILE=$(mktemp)
-        cp docker-compose.yml "$TEMP_FILE"
-        
+        cp "$COMPOSE_FILE" "$TEMP_FILE"
+
         # Reemplazar puertos usando métodos más seguros
         if command -v perl >/dev/null 2>&1; then
-            # Usar perl para mejor manejo de caracteres especiales
-            perl -pi -e "s|/dev/ttyUSB[0-9]*|$ESP32_PORT|g" docker-compose.yml
-            perl -pi -e "s|/dev/ttyACM[0-9]*|$ESP32_PORT|g" docker-compose.yml
-            perl -pi -e "s|/dev/ttyS[0-9]*|$ESP32_PORT|g" docker-compose.yml
-            perl -pi -e "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
+            perl -pi -e "s|/dev/ttyUSB[0-9]*|$ESP32_PORT|g" "$COMPOSE_FILE"
+            perl -pi -e "s|/dev/ttyACM[0-9]*|$ESP32_PORT|g" "$COMPOSE_FILE"
+            perl -pi -e "s|/dev/ttyS[0-9]*|$ESP32_PORT|g" "$COMPOSE_FILE"
+            perl -pi -e "s|SERIAL_PORT=/dev/tty[A-Za-z0-9]*|SERIAL_PORT=$ESP32_PORT|g" "$COMPOSE_FILE"
         else
-            # Usar sed con delimitador seguro y escape básico
-            sed -i "s|/dev/ttyUSB0|$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|/dev/ttyUSB1|$ESP32_PORT|g" docker-compose.yml  
-            sed -i "s|/dev/ttyACM0|$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|/dev/ttyACM1|$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|/dev/ttyS5|$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|/dev/ttyS0|$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|SERIAL_PORT=/dev/ttyUSB0|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|SERIAL_PORT=/dev/ttyACM0|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
-            sed -i "s|SERIAL_PORT=/dev/ttyS5|SERIAL_PORT=$ESP32_PORT|g" docker-compose.yml
+            sed -i "s|/dev/ttyUSB0|$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|/dev/ttyUSB1|$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|/dev/ttyACM0|$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|/dev/ttyACM1|$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|/dev/ttyS5|$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|/dev/ttyS0|$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|SERIAL_PORT=/dev/ttyUSB0|SERIAL_PORT=$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|SERIAL_PORT=/dev/ttyACM0|SERIAL_PORT=$ESP32_PORT|g" "$COMPOSE_FILE"
+            sed -i "s|SERIAL_PORT=/dev/ttyS5|SERIAL_PORT=$ESP32_PORT|g" "$COMPOSE_FILE"
         fi
-        
+
         # Verificar que los cambios se aplicaron
-        if grep -q "$ESP32_PORT" docker-compose.yml; then
-            print_success "✅ docker-compose.yml configurado correctamente con $ESP32_PORT"
+        if grep -q "$ESP32_PORT" "$COMPOSE_FILE"; then
+            print_success "✅ $COMPOSE_FILE configurado correctamente con $ESP32_PORT"
             rm -f "$TEMP_FILE"
         else
             print_warning "⚠️ Restaurando archivo original y usando configuración manual..."
-            cp "$TEMP_FILE" docker-compose.yml
+            cp "$TEMP_FILE" "$COMPOSE_FILE"
             rm -f "$TEMP_FILE"
-            
+
             print_error "❌ No se pudo configurar el puerto automáticamente"
-            print_status "Será necesario editar manualmente docker-compose.yml"
+            print_status "Será necesario editar manualmente $COMPOSE_FILE"
             print_status "Cambia todas las referencias de puertos serial a: $ESP32_PORT"
             echo ""
             print_status "Puedes continuar y editar el archivo después, o cancelar con Ctrl+C"
@@ -464,7 +462,7 @@ configure_project() {
             fi
         fi
     else
-        print_error "❌ No se encontró docker-compose.yml"
+        print_error "❌ No se encontró $COMPOSE_FILE"
         return 1
     fi
     
@@ -618,6 +616,14 @@ setup_directory_permissions() {
 # Verificar y construir imagen
 build_and_start() {
     print_header "🏗️ CONSTRUYENDO Y INICIANDO SERVICIOS MULTI-CPU"
+
+    # Detectar arquitectura y configuración
+    ARCH=$(uname -m)
+    CPU_COUNT=$(nproc)
+    
+    # Determinar archivo de compose a usar
+    COMPOSE_FILE="docker-compose.yml"
+
 
     # Determinar el archivo de configuración a modificar
     if [ -f "docker-compose.resolved.yml" ]; then
