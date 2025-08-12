@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-FastAPI App Principal - ESP32 Solar Charger API con Schedule
+FastAPI App Principal - ESP32 Solar Charger API con Schedule y Multi-CPU
+Soporte universal: x86, ARM, RISC-V con auto-detección de CPU
 """
 
 import asyncio
 import uvicorn
+import os
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +18,14 @@ from core.config import settings
 from core.logger import logger
 from services.esp32_manager import ESP32Manager
 from services.schedule_manager import ScheduleManager
+
+# NUEVO: Importar detección de CPU
+try:
+    from utils.cpu_detection import get_cached_runtime_config
+    CPU_DETECTION_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"⚠️ CPU detection no disponible: {e}")
+    CPU_DETECTION_AVAILABLE = False
 
 # Importar routers
 from api.data import router as data_router
@@ -27,53 +38,98 @@ from services.rate_limiter import rate_limiter
 from models.rate_limiting import RateLimitStats
 from core.dependencies import check_health_rate_limit  
 
-# Managers globales
+# Managers globales - IMPORTANTE: Compartidos entre workers de forma segura
 esp32_manager: ESP32Manager = None
 schedule_manager: ScheduleManager = None  # NUEVO
 
+# Variable global para configuración de CPU
+_cpu_config = None
+
+def get_cpu_configuration():
+    """Obtener configuración de CPU (con cache thread-safe)"""
+    global _cpu_config
+    if _cpu_config is None and CPU_DETECTION_AVAILABLE:
+        try:
+            _cpu_config = get_cached_runtime_config()
+            logger.info("🔍 Configuración de CPU cargada correctamente")
+        except Exception as e:
+            logger.error(f"❌ Error cargando configuración de CPU: {e}")
+            _cpu_config = {"use_gunicorn": False, "workers": 1}
+    elif _cpu_config is None:
+        _cpu_config = {"use_gunicorn": False, "workers": 1}
+    return _cpu_config
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Gestión del ciclo de vida de la aplicación"""
+    """
+    Gestión del ciclo de vida de la aplicación - MEJORADO para multi-worker
+    
+    IMPORTANTE: Esta función se ejecuta una vez por worker en modo Gunicorn,
+    pero el ESP32Manager debe ser compartido de forma segura entre workers.
+    """
     global esp32_manager, schedule_manager
     
+    # Obtener configuración de CPU
+    cpu_config = get_cpu_configuration()
+    
     # Startup
-    logger.info("🚀 Iniciando ESP32 Solar Charger API con Schedule...")
+    if cpu_config.get("use_gunicorn"):
+        logger.info(f"🚀 Iniciando ESP32 Solar API - Worker Gunicorn (PID: {os.getpid()})")
+    else:
+        logger.info("🚀 Iniciando ESP32 Solar API - Modo Single Worker")
     
     try:
-        # Inicializar ESP32 Manager con configuración correcta
-        esp32_manager = ESP32Manager(
-            port=settings.SERIAL_PORT,
-            baudrate=settings.SERIAL_BAUDRATE
-        )
-        
-        if await esp32_manager.start():
-            logger.info("✅ ESP32 Manager iniciado correctamente")
+        # NUEVO: Inicialización thread-safe del ESP32Manager
+        if esp32_manager is None:
+            logger.info("🔌 Inicializando ESP32 Manager...")
+            esp32_manager = ESP32Manager(
+                port=settings.SERIAL_PORT,
+                baudrate=settings.SERIAL_BAUDRATE
+            )
+            
+            if await esp32_manager.start():
+                logger.info("✅ ESP32 Manager iniciado correctamente")
+            else:
+                logger.error("❌ Error iniciando ESP32 Manager")
         else:
-            logger.error("❌ Error iniciando ESP32 Manager")
+            logger.info("🔌 ESP32 Manager ya inicializado (worker compartido)")
         
-        # NUEVO: Inicializar Schedule Manager
-        schedule_manager = ScheduleManager(esp32_manager=esp32_manager)
-        await schedule_manager.start()
-        logger.info("✅ Schedule Manager iniciado correctamente")
+        # NUEVO: Inicializar Schedule Manager (una vez por aplicación)
+        if schedule_manager is None:
+            logger.info("⏰ Inicializando Schedule Manager...")
+            schedule_manager = ScheduleManager(esp32_manager=esp32_manager)
+            await schedule_manager.start()
+            logger.info("✅ Schedule Manager iniciado correctamente")
+        else:
+            logger.info("⏰ Schedule Manager ya inicializado")
             
     except Exception as e:
         logger.error(f"❌ Error en startup: {e}")
+        # En modo multi-worker, un fallo no debe tumbar toda la aplicación
+        if not cpu_config.get("use_gunicorn"):
+            raise  # Solo re-raise en modo single worker
     
     yield
     
-    # Shutdown
-    logger.info("🛑 Cerrando ESP32 Solar Charger API...")
+    # Shutdown - Solo limpiar en el último worker
+    logger.info(f"🛑 Cerrando worker (PID: {os.getpid()})...")
     
-    # NUEVO: Detener Schedule Manager
-    if schedule_manager:
-        await schedule_manager.stop()
-        logger.info("✅ Schedule Manager detenido")
+    # NOTA: En modo Gunicorn, cada worker ejecuta shutdown, pero solo
+    # el último debe hacer la limpieza completa. Por simplicidad,
+    # permitimos que cada worker haga su propia limpieza.
     
-    if esp32_manager:
-        await esp32_manager.stop()
-        logger.info("✅ ESP32 Manager detenido")
+    try:
+        if schedule_manager:
+            await schedule_manager.stop()
+            logger.info("✅ Schedule Manager detenido")
         
-    logger.info("✅ API cerrada correctamente")
+        if esp32_manager:
+            await esp32_manager.stop()
+            logger.info("✅ ESP32 Manager detenido")
+    except Exception as e:
+        logger.error(f"❌ Error en shutdown: {e}")
+        
+    logger.info("✅ Worker cerrado correctamente")
 
 # Crear aplicación FastAPI
 app = FastAPI(
@@ -178,6 +234,9 @@ async def reset_rate_limits():
 async def get_system_info():
     """Obtener información completa del sistema"""
     try:
+        # Obtener configuración de CPU
+        cpu_config = get_cpu_configuration()
+        
         system_info = {
             "api": {
                 "name": settings.API_TITLE,
@@ -186,7 +245,15 @@ async def get_system_info():
             },
             "esp32": esp32_manager.get_connection_info() if esp32_manager else {"error": "Not initialized"},
             "schedule": schedule_manager.get_status() if schedule_manager else {"error": "Not initialized"},
-            "rate_limiting": rate_limiter.get_stats().dict()
+            "rate_limiting": rate_limiter.get_stats().dict(),
+            # NUEVO: Información de CPU y arquitectura
+            "cpu_configuration": cpu_config if CPU_DETECTION_AVAILABLE else {"error": "CPU detection not available"},
+            "runtime_mode": "multi-worker" if cpu_config.get("use_gunicorn") else "single-worker",
+            "process_info": {
+                "pid": os.getpid(),
+                "workers_configured": cpu_config.get("workers", 1),
+                "force_single_worker": os.getenv('FORCE_SINGLE_WORKER', 'false')
+            }
         }
         
         return system_info
@@ -196,11 +263,59 @@ async def get_system_info():
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 if __name__ == "__main__":
-    # Ejecutar servidor
-    uvicorn.run(
-        "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
-    )
+    """
+    Punto de entrada principal - MEJORADO con detección multi-CPU
+    
+    Decide automáticamente entre:
+    - Uvicorn single-worker (modo desarrollo, debugging, o hardware limitado)
+    - Gunicorn multi-worker (modo producción con múltiples CPUs)
+    """
+    
+    # Obtener configuración de CPU
+    cpu_config = get_cpu_configuration()
+    
+    # Decidir modo de ejecución
+    use_gunicorn = cpu_config.get("use_gunicorn", False)
+    workers = cpu_config.get("workers", 1)
+    force_single = os.getenv('FORCE_SINGLE_WORKER', 'false').lower() == 'true'
+    
+    if force_single:
+        logger.info("🔧 FORCE_SINGLE_WORKER activado - usando Uvicorn single-worker")
+        use_gunicorn = False
+    
+    if use_gunicorn and workers > 1:
+        logger.info(f"🚀 Iniciando con Gunicorn multi-worker ({workers} workers)")
+        logger.info("💡 Para usar single-worker, configura MAX_WORKERS=1 o FORCE_SINGLE_WORKER=true")
+        
+        # Usar Gunicorn con configuración dinámica
+        import subprocess
+        import sys
+        
+        gunicorn_cmd = [
+            sys.executable, "-m", "gunicorn",
+            "--config", "gunicorn_conf.py",
+            "main:app"
+        ]
+        
+        try:
+            subprocess.run(gunicorn_cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"❌ Error ejecutando Gunicorn: {e}")
+            logger.info("🔄 Fallback a Uvicorn single-worker...")
+            use_gunicorn = False
+        except KeyboardInterrupt:
+            logger.info("🛑 Detenido por usuario")
+            sys.exit(0)
+    
+    if not use_gunicorn:
+        # Modo single-worker con Uvicorn (comportamiento original)
+        logger.info("🔧 Iniciando con Uvicorn single-worker")
+        logger.info("💡 Para multi-worker, configura MAX_WORKERS=auto en .env")
+        
+        uvicorn.run(
+            "main:app",
+            host=settings.HOST,
+            port=settings.PORT,
+            reload=settings.DEBUG,
+            log_level=settings.LOG_LEVEL.lower()
+        )

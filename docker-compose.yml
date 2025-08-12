@@ -29,10 +29,10 @@ services:
     ports:
       - "8000:8000"  # API HTTP
     
-    # ✅ CONFIGURACIÓN MULTI-CPU CORREGIDA (sintaxis compatible)
-    cpus: 6.0                    # Usar 4 CPUs (sintaxis v3.8)
-    mem_limit: 1512m             # Límite memoria
-    memswap_limit: 1512m         # Límite swap
+    # ✅ CONFIGURACIÓN MULTI-CPU DINÁMICO (compatible con x86/ARM/RISC-V)
+    cpus: ${CPU_LIMIT:-4.0}              # Límite CPU desde .env (auto-detección)
+    mem_limit: ${MEMORY_LIMIT:-1g}       # Límite memoria desde .env
+    memswap_limit: ${MEMORY_LIMIT:-1g}   # Límite swap igual que memoria
     
     # ✅ VARIABLES DE ENTORNO DESDE .env
     environment:
@@ -52,12 +52,17 @@ services:
       # ✅ REDIS CONFIGURATION
       - REDIS_URL=redis://esp32-redis:6379
       
-      # ✅ OPTIMIZACIONES MULTI-THREAD (NO QEMU_CPU)
-      - OMP_NUM_THREADS=4          # OpenMP threads
+      # ✅ CONFIGURACIÓN MULTI-CPU DINÁMICO
+      - MAX_WORKERS=${MAX_WORKERS:-auto}
+      - CPU_LIMIT=${CPU_LIMIT:-auto}
+      - MEMORY_LIMIT=${MEMORY_LIMIT:-auto}
+      - FORCE_SINGLE_WORKER=${FORCE_SINGLE_WORKER:-false}
+      
+      # ✅ OPTIMIZACIONES MULTI-THREAD DINÁMICAS
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-auto}    # OpenMP threads (auto-detección)
       - MALLOC_ARENA_MAX=4         # Malloc arenas
-      - PYTHONTHREADS=4            # Python threads
       - UV_THREADPOOL_SIZE=4       # libuv threadpool
-      - GOMAXPROCS=4               # Go max processes
+      - GOMAXPROCS=4               # Go max processes (si aplica)
       
       # ✅ OPTIMIZACIONES PYTHON
       - PYTHONUNBUFFERED=1
@@ -117,8 +122,9 @@ services:
     # Labels
     labels:
       - "esp32.component=api"
-      - "esp32.optimization=multi-cpu"
-      - "esp32.cpus=4"
+      - "esp32.optimization=multi-cpu-dynamic"
+      - "esp32.cpu_detection=auto"
+      - "esp32.workers=${MAX_WORKERS:-auto}"
 
   # ═══════════════════════════════════════════════════════════════════════════
   # REDIS - Cache

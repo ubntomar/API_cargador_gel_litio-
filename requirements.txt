@@ -1,6 +1,7 @@
 # FastAPI y servidor web
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
+gunicorn==21.2.0
 
 # Modelos y validación de datos
 pydantic==2.5.0

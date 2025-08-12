@@ -67,20 +67,29 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 WORKDIR /app
 
 # Copiar código de la aplicación
-COPY --chown=esp32api:esp32api . .
+# Copiar código fuente y configuración
+COPY . /app/
+
+# NUEVO: Copiar script de inicio inteligente y configuración multi-CPU
+COPY start_smart.sh /app/start_smart.sh
+COPY gunicorn_conf.py /app/gunicorn_conf.py
 
 # Crear script de healthcheck
 RUN echo '#!/bin/bash\ncurl -f http://localhost:8000/health || exit 1' > /app/healthcheck.sh && \
     chmod +x /app/healthcheck.sh && \
     chown esp32api:esp32api /app/healthcheck.sh
 
-# Crear script de inicio
+# Crear script de inicio inteligente
 RUN echo '#!/bin/bash\n\
-echo "🚀 Iniciando ESP32 Solar Charger API (Emulado x86_64)"\n\
+echo "🚀 ESP32 Solar Charger API - Multi-CPU Universal"\n\
 echo "📡 Puerto Serial: ${SERIAL_PORT:-/dev/ttyS5}"\n\
 echo "🌐 Puerto HTTP: ${PORT:-8000}"\n\
 echo "🏗️ Plataforma: $(uname -m) (emulado en RISC-V)"\n\
-echo "🕐 Hora: $(date)"\n\
+echo "� CPUs: $(nproc)"\n\
+echo "🚀 Workers: ${MAX_WORKERS:-auto}"\n\
+echo "⚡ CPU Limit: ${CPU_LIMIT:-auto}"\n\
+echo "💾 Memory: ${MEMORY_LIMIT:-auto}"\n\
+echo "�🕐 Hora: $(date)"\n\
 echo "==============================================="\n\
 \n\
 # Verificar puerto serial\n\
@@ -101,10 +110,19 @@ if [ -e "${SERIAL_PORT:-/dev/ttyS5}" ]; then\n\
     fi\n\
 fi\n\
 \n\
-echo "🚀 Iniciando servidor..."\n\
-exec python main.py' > /app/start.sh && \
+echo "🚀 Iniciando con detección inteligente..."\n\
+\n\
+# Usar script inteligente si existe, sino Python directo\n\
+if [ -f "/app/start_smart.sh" ]; then\n\
+    echo "📄 Usando script inteligente multi-CPU"\n\
+    exec /app/start_smart.sh\n\
+else\n\
+    echo "🐍 Fallback a Python directo"\n\
+    exec python main.py\n\
+fi' > /app/start.sh && \
     chmod +x /app/start.sh && \
-    chown esp32api:esp32api /app/start.sh
+    chmod +x /app/start_smart.sh && \
+    chown esp32api:esp32api /app/start.sh /app/start_smart.sh /app/gunicorn_conf.py
 
 # Cambiar a usuario no-root
 USER esp32api
