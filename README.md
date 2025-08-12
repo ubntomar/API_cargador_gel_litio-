@@ -1,8 +1,10 @@
-# ESP32 Solar Charger API
+# ESP32 Solar Charger API - Multi-Arquitectura
 
-API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad de apagado programado diario** y **sistema de configuraciones personalizadas**.
+API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad de apagado programado diario**, **sistema de configuraciones personalizadas** y **optimización automática multi-CPU**.
 
-> ✅ **ESTADO ACTUAL - Agosto 2025:** API completamente funcional y validado. Sistema de configuraciones personalizadas operativo. Listo para integración frontend.
+> ✅ **ESTADO ACTUAL - Agosto 2025:** API completamente funcional y validado. Sistema multi-CPU implementado con auto-detección de arquitectura. Compatible con x86, ARM y RISC-V.
+
+> 🏗️ **COMPATIBILIDAD UNIVERSAL:** Compatible con x86_64, ARM64, RISC-V y otras arquitecturas. Auto-detección de CPU y optimización automática de workers.
 
 > 📚 **PARA DESARROLLADORES FRONTEND:** Consulta [`FRONTEND_API_DOCUMENTATION.md`](./FRONTEND_API_DOCUMENTATION.md) para documentación completa de endpoints, ejemplos de código y mejores prácticas.
 
@@ -35,71 +37,142 @@ API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad d
 - 🔔 Notificaciones de próximos eventos programados
 
 ### ✅ **Características Técnicas Avanzadas**
-- 🔒 Thread-safe con manejo de concurrencia
+- 🏗️ **Multi-CPU y Multi-Arquitectura**: Auto-detección de CPU y optimización automática
+- � **Escalabilidad Inteligente**: Desde 1 worker (single-core) hasta 6 workers (multi-core)
+- 🔧 **Arquitecturas Soportadas**: x86_64, ARM64, RISC-V, Orange Pi, Raspberry Pi
+- 🐳 **Docker Optimizado**: Límites dinámicos de CPU y memoria según hardware
+- �🔒 Thread-safe con manejo de concurrencia
 - 🏥 Endpoints de health check y monitoreo
 - 📝 Logging detallado para debugging
 - 🔄 Cache inteligente para optimizar rendimiento
 - 🛡️ Manejo robusto de errores de comunicación
 
-## 🚀 Instalación Rápida
+## 🚀 Instalación Universal (Cualquier Arquitectura)
 
-### 💻 Instalación Estándar (x86/x64)
+### 🎯 **Instalación Automática con Auto-Detección**
 
 ```bash
-# Clonar/crear el proyecto
+# 1. Clonar el proyecto
 git clone <tu-repo> esp32_api
 cd esp32_api
 
-# Crear entorno virtual
+# 2. Ejecutar instalación automática (detecta tu arquitectura)
+./start_multicpu.sh
+```
+
+### 💻 **Instalación Manual por Arquitectura**
+
+#### 🖥️ **x86_64 / AMD64** (PC estándar)
+```bash
+# Docker Compose (recomendado)
+docker compose -f docker-compose.resolved.yml up --build
+
+# O instalación local
 python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate  # Windows
-
-# Instalar dependencias
+source venv/bin/activate
 pip install -r requirements.txt
+python3 resolve_docker_config.py  # Auto-detecta configuración
+```
 
-# Configurar variables de entorno
+#### 🍓 **ARM64** (Raspberry Pi 4/5, Orange Pi)
+```bash
+# Auto-detección y optimización para ARM
+./start_multicpu.sh
+
+# O manual con Docker
+source venv/bin/activate
+python3 resolve_docker_config.py
+docker compose -f docker-compose.resolved.yml up --build
+```
+
+#### 🏗️ **RISC-V** (Orange Pi R2S, VisionFive)
+```bash
+# Optimización específica para RISC-V
+./start_multicpu.sh
+
+# Configuración manual para RISC-V
+export MAX_WORKERS=auto
+export CPU_LIMIT=auto  
+export MEMORY_LIMIT=auto
+./start_multicpu.sh
+```
+cd esp32_api
+
+### 🌐 **Configuración Universal de Variables**
+
+El sistema detecta automáticamente tu hardware y optimiza la configuración. Puedes usar los valores por defecto o personalizar según tus necesidades:
+
+```bash
+# Copiar archivo de configuración
 cp .env.example .env
-# Editar .env con tu configuración
 
-# ⚠️ IMPORTANTE: Crear carpeta logs con permisos correctos
-mkdir -p logs
-chmod 755 logs
+# Variables Multi-CPU (auto-detectadas)
+MAX_WORKERS=auto          # auto = detección automática de workers óptimos
+CPU_LIMIT=auto           # auto = límite de CPU según arquitectura  
+MEMORY_LIMIT=auto        # auto = memoria óptima según workers
+FORCE_SINGLE_WORKER=false # true = fuerza 1 worker (debugging)
 
-# Ejecutar servidor
-python main.py
+# Variables ESP32 (editar según tu hardware)
+SERIAL_PORT=/dev/ttyUSB0  # Puerto serial del ESP32
+SERIAL_BAUDRATE=9600      # Velocidad de comunicación
+SERIAL_TIMEOUT=3.0        # Timeout de comunicación
+
+# Variables del servidor
+HOST=0.0.0.0             # IP del servidor (0.0.0.0 = todas las interfaces)
+PORT=8000                # Puerto HTTP de la API
+DEBUG=false              # Modo debug (true = logs detallados)
 ```
 
-### 🍊 Instalación en Orange Pi R2S (RISC-V)
+### 📋 **Configuraciones por Hardware**
 
-Para usar este proyecto en Orange Pi R2S u otras máquinas RISC-V, sigue estos pasos específicos:
-
-#### 1. Preparación del Sistema
+#### 🖥️ **PC/Servidor x86_64** (8+ CPUs)
 ```bash
-# Actualizar sistema
-sudo apt update && sudo apt upgrade -y
+# Configuración automática (recomendado)
+MAX_WORKERS=auto      # → 6 workers
+CPU_LIMIT=auto        # → 8.0 CPUs  
+MEMORY_LIMIT=auto     # → 1792m
 
-# Instalar dependencias del sistema
-sudo apt install -y python3 python3-pip python3-venv python3-dev
-sudo apt install -y build-essential git curl wget
-sudo apt install -y docker.io docker-compose
-
-# Verificar arquitectura
-uname -m  # Debería mostrar: riscv64
-
-# Configurar permisos para Docker
-sudo usermod -aG docker $USER
-sudo systemctl enable docker
-sudo systemctl start docker
+# Configuración manual (opcional)
+MAX_WORKERS=6
+CPU_LIMIT=8.0
+MEMORY_LIMIT=2g
 ```
 
-#### 2. Configuración del Puerto Serial
+#### 🍓 **Raspberry Pi 4/5** (4 CPUs)
 ```bash
-# Verificar dispositivos USB/Serial disponibles
-ls -la /dev/ttyUSB* /dev/ttyACM*
+# Configuración automática (recomendado)
+MAX_WORKERS=auto      # → 2 workers
+CPU_LIMIT=auto        # → 3.0 CPUs
+MEMORY_LIMIT=auto     # → 768m
 
-# Agregar usuario al grupo dialout para acceso serial
-sudo usermod -aG dialout $USER
+# Configuración conservadora para Pi 4
+MAX_WORKERS=2
+CPU_LIMIT=3.0
+MEMORY_LIMIT=512m
+```
+
+#### 🍊 **Orange Pi RISC-V** (8 CPUs)
+```bash
+# Configuración automática optimizada para RISC-V
+MAX_WORKERS=auto      # → 4 workers (timeouts extendidos)
+CPU_LIMIT=auto        # → 6.0 CPUs
+MEMORY_LIMIT=auto     # → 1280m
+
+# Configuración manual específica para RISC-V
+MAX_WORKERS=4
+CPU_LIMIT=6.0
+MEMORY_LIMIT=1g
+```
+
+#### 💻 **Equipos de Desarrollo** (single-worker para debugging)
+```bash
+# Configuración de desarrollo (1 worker para debugging fácil)
+MAX_WORKERS=1
+CPU_LIMIT=2.0
+MEMORY_LIMIT=512m
+FORCE_SINGLE_WORKER=true
+DEBUG=true
+```
 
 # Configurar permisos del puerto (ajustar según tu dispositivo)
 sudo chmod 666 /dev/ttyUSB0

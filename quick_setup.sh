@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# ESP32 API - Setup Rápido con Configuración Automática de Puerto
+# ESP32 API - Setup Universal Multi-Arquitectura con Auto-Detección de CPU
 # =============================================================================
 
 set -e
@@ -11,6 +11,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+PURPLE='\033[0;35m'
 NC='\033[0m'
 
 print_header() {
@@ -65,6 +66,107 @@ show_docker_debugging_help() {
     echo ""
     
     echo -e "${YELLOW}💡 TIP: Ejecuta 'bash quick_setup.sh debug' para mostrar esta ayuda${NC}"
+    echo ""
+}
+
+# Función para detectar configuración de CPU
+detect_cpu_configuration() {
+    print_header "🔍 DETECCIÓN AUTOMÁTICA DE CPU Y ARQUITECTURA"
+    
+    # Detectar arquitectura
+    ARCH=$(uname -m)
+    CPU_COUNT=$(nproc)
+    SYSTEM=$(uname -s)
+    
+    # Detectar tipo de arquitectura
+    case "$ARCH" in
+        "x86_64"|"amd64")
+            ARCH_TYPE="x86_64"
+            ARCH_EMOJI="🖥️"
+            ;;
+        "aarch64"|"arm64")
+            ARCH_TYPE="arm64"
+            ARCH_EMOJI="🍓"
+            ;;
+        "riscv64"|"riscv")
+            ARCH_TYPE="riscv"
+            ARCH_EMOJI="🍊"
+            ;;
+        "armv7l"|"armhf")
+            ARCH_TYPE="armv7"
+            ARCH_EMOJI="📱"
+            ;;
+        *)
+            ARCH_TYPE="unknown"
+            ARCH_EMOJI="❓"
+            ;;
+    esac
+    
+    # Calcular workers óptimos
+    if [ "$CPU_COUNT" -le 1 ]; then
+        OPTIMAL_WORKERS=1
+    elif [ "$CPU_COUNT" -eq 2 ]; then
+        OPTIMAL_WORKERS=1
+    elif [ "$CPU_COUNT" -le 4 ]; then
+        OPTIMAL_WORKERS=2
+    elif [ "$CPU_COUNT" -le 6 ]; then
+        OPTIMAL_WORKERS=3
+    elif [ "$CPU_COUNT" -le 8 ]; then
+        OPTIMAL_WORKERS=4
+    else
+        # Para muchos CPUs, máximo 6 workers, dejar 2 libres
+        OPTIMAL_WORKERS=$((CPU_COUNT - 2))
+        if [ "$OPTIMAL_WORKERS" -gt 6 ]; then
+            OPTIMAL_WORKERS=6
+        fi
+    fi
+    
+    # Calcular límite de CPU
+    if [ "$CPU_COUNT" -le 2 ]; then
+        CPU_LIMIT="1.0"
+    elif [ "$CPU_COUNT" -le 8 ]; then
+        CPU_LIMIT=$((CPU_COUNT - 1)).0
+    else
+        # Para muchos CPUs, usar máximo 8
+        CALC_LIMIT=$((CPU_COUNT - 2))
+        if [ "$CALC_LIMIT" -gt 8 ]; then
+            CALC_LIMIT=8
+        fi
+        CPU_LIMIT="$CALC_LIMIT.0"
+    fi
+    
+    # Calcular memoria
+    BASE_MEMORY=512
+    WORKER_MEMORY=$((256 * (OPTIMAL_WORKERS - 1)))
+    TOTAL_MEMORY=$((BASE_MEMORY + WORKER_MEMORY))
+    
+    # Límite máximo de 2GB
+    if [ "$TOTAL_MEMORY" -gt 2048 ]; then
+        TOTAL_MEMORY=2048
+    fi
+    
+    MEMORY_LIMIT="${TOTAL_MEMORY}m"
+    
+    # Mostrar información detectada
+    print_success "$ARCH_EMOJI Arquitectura detectada: $ARCH_TYPE ($ARCH)"
+    print_success "🔧 CPUs disponibles: $CPU_COUNT"
+    print_success "👥 Workers óptimos: $OPTIMAL_WORKERS"
+    print_success "⚡ Límite CPU: $CPU_LIMIT"
+    print_success "💾 Límite memoria: $MEMORY_LIMIT"
+    
+    # Configuración específica por arquitectura
+    case "$ARCH_TYPE" in
+        "riscv")
+            print_status "🍊 Configuración RISC-V: Timeouts extendidos para mejor estabilidad"
+            ;;
+        "arm64"|"armv7")
+            print_status "🍓 Configuración ARM: Optimizada para Raspberry Pi / Orange Pi"
+            ;;
+        "x86_64")
+            print_status "🖥️ Configuración x86_64: Máximo rendimiento"
+            ;;
+    esac
+    
     echo ""
 }
 
