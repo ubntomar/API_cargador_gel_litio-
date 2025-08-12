@@ -618,13 +618,8 @@ setup_directory_permissions() {
 # Verificar y construir imagen
 build_and_start() {
     print_header "🏗️ CONSTRUYENDO Y INICIANDO SERVICIOS MULTI-CPU"
-    
-    # Detectar arquitectura y configuración
-    ARCH=$(uname -m)
-    CPU_COUNT=$(nproc)
-    
-    # Determinar archivo de compose a usar
-    COMPOSE_FILE="docker-compose.yml"
+
+    # Determinar el archivo de configuración a modificar
     if [ -f "docker-compose.resolved.yml" ]; then
         COMPOSE_FILE="docker-compose.resolved.yml"
         print_success "$ARCH_EMOJI Usando configuración auto-resuelta para $ARCH_TYPE"
