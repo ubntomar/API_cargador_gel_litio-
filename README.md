@@ -1,62 +1,4 @@
-# ⚠️ Configuración importante para producción: permisos en /dev/ttyUSBx
 
-Para asegurar que los dispositivos `/dev/ttyUSBx` tengan siempre los permisos correctos en producción, sigue estos pasos:
-
-## 1. Script para asignar permisos
-
-Crea un script en `/usr/local/bin/set_tty_permissions.sh` con el siguiente contenido:
-
-```bash
-#!/bin/bash
-sudo chmod 666 /dev/ttyUSB0
-sudo chmod 666 /dev/ttyUSB1
-sudo chmod 666 /dev/ttyUSB2
-```
-
-Haz el script ejecutable:
-
-```bash
-sudo chmod +x /usr/local/bin/set_tty_permissions.sh
-```
-
-## 2. Ejecutar el script al reiniciar (usando cron)
-
-Edita el crontab del sistema:
-
-```bash
-sudo crontab -e
-```
-
-Agrega la siguiente línea al final del archivo:
-
-```
-@reboot /usr/local/bin/set_tty_permissions.sh
-```
-
-## 3. Ejecutar el script al conectar un dispositivo (usando udev)
-
-Crea una regla de udev:
-
-```bash
-sudo nano /etc/udev/rules.d/99-ttyusb.rules
-```
-
-Agrega la siguiente línea:
-
-```
-ACTION=="add", KERNEL=="ttyUSB[0-9]*", RUN+="/usr/local/bin/set_tty_permissions.sh"
-```
-
-Recarga las reglas de udev:
-
-```bash
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
----
-
-Con estos pasos, el sistema asignará los permisos adecuados tanto al iniciar como cada vez que se conecte un nuevo dispositivo `ttyUSB`.
 # ESP32 Solar Charger API - Multi-Arquitectura
 
 API REST para control y monitoreo del cargador solar ESP32 con **funcionalidad de apagado programado diario**, **sistema de configuraciones personalizadas** y **optimización automática multi-CPU**.
@@ -2027,3 +1969,66 @@ chmod +x check_updates.sh
 # Ejecutar manualmente para verificar
 ./check_updates.sh
 ```
+
+
+
+
+# ⚠️ Configuración importante para producción: permisos en /dev/ttyUSBx
+
+Para asegurar que los dispositivos `/dev/ttyUSBx` tengan siempre los permisos correctos en producción, sigue estos pasos:
+
+## 1. Script para asignar permisos
+
+Crea un script en `/usr/local/bin/set_tty_permissions.sh` con el siguiente contenido:
+
+```bash
+#!/bin/bash
+sudo chmod 666 /dev/ttyUSB0
+sudo chmod 666 /dev/ttyUSB1
+sudo chmod 666 /dev/ttyUSB2
+```
+
+Haz el script ejecutable:
+
+```bash
+sudo chmod +x /usr/local/bin/set_tty_permissions.sh
+```
+
+## 2. Ejecutar el script al reiniciar (usando cron)
+
+Edita el crontab del sistema:
+
+```bash
+sudo crontab -e
+```
+
+Agrega la siguiente línea al final del archivo:
+
+```
+@reboot /usr/local/bin/set_tty_permissions.sh
+```
+
+## 3. Ejecutar el script al conectar un dispositivo (usando udev)
+
+Crea una regla de udev:
+
+```bash
+sudo nano /etc/udev/rules.d/99-ttyusb.rules
+```
+
+Agrega la siguiente línea:
+
+```
+ACTION=="add", KERNEL=="ttyUSB[0-9]*", RUN+="/usr/local/bin/set_tty_permissions.sh"
+```
+
+Recarga las reglas de udev:
+
+```bash
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+---
+
+Con estos pasos, el sistema asignará los permisos adecuados tanto al iniciar como cada vez que se conecte un nuevo dispositivo `ttyUSB`.
