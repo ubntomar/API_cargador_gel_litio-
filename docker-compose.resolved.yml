@@ -52,7 +52,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
+    restart: unless-stopped
   # ============================================================================
   # REDIS SERVICE
   # ============================================================================
@@ -84,7 +84,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-
+    restart: unless-stopped
 networks:
   esp32-network:
     driver: bridge
