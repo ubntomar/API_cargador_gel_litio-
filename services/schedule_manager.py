@@ -15,8 +15,8 @@ class ScheduleManager:
     def __init__(self, esp32_manager=None):
         self.esp32_manager = esp32_manager
         
-        # Configuración del schedule (en memoria - NO persiste)
-        self.enabled = True
+    # Configuración del schedule (en memoria - NO persiste)
+        self.enabled = False
         self.start_time = "00:00"  # Default: 12:00 AM
         self.duration_seconds = 21600  # Default: 6 horas
         
