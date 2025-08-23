@@ -34,6 +34,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      - ./services:/app/services
       - .:/app/config:rw
     
     # Conectar a la red de servicios

@@ -11,6 +11,13 @@ echo "==============================================="
 echo "🚀 ESP32 Solar Charger API - Startup Inteligente"
 echo "==============================================="
 
+## Leer archivo .env si existe
+if [ -f .env ]; then
+    set -a
+    source .env
+    set +a
+fi
+
 # Variables de entorno con defaults
 export HOST=${HOST:-0.0.0.0}
 export PORT=${PORT:-8000}
